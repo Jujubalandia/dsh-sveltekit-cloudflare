@@ -16,7 +16,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "edit|write|str_replace",
+        "matcher": "edit|write|str_replace_editor",
         "hooks": [
           {
             "type": "command",
@@ -28,7 +28,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "edit|write|str_replace",
+        "matcher": "edit|write|str_replace_editor",
         "hooks": [
           {
             "type": "command",

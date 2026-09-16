@@ -372,7 +372,7 @@ comandos chamam `scripts/hook-dispatch.mjs`, que extrai
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "edit|write|str_replace",
+        "matcher": "edit|write|str_replace_editor",
         "hooks": [
           {
             "type": "command",

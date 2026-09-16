@@ -194,8 +194,8 @@ que não são eventos do bridge vivem nos hooks de git.
 
 | # | Gate | Onde vive | Quando dispara | Ação |
 |---|------|-----------|----------------|------|
-| 1 | `PreToolUse` | `.agents/hooks.json` | Antes de `edit`/`write`/`str_replace` | `scripts/pre-edit-check.sh` via `hook-dispatch.mjs` |
-| 2 | `PostToolUse` | `.agents/hooks.json` | Depois de `edit`/`write`/`str_replace` | `scripts/post-edit-check.sh` via `hook-dispatch.mjs` |
+| 1 | `PreToolUse` | `.agents/hooks.json` | Antes de `edit`/`write`/`str_replace_editor` | `scripts/pre-edit-check.sh` via `hook-dispatch.mjs` |
+| 2 | `PostToolUse` | `.agents/hooks.json` | Depois de `edit`/`write`/`str_replace_editor` | `scripts/post-edit-check.sh` via `hook-dispatch.mjs` |
 | 3 | `UserPromptSubmit` | `.agents/hooks.json` | Ao enviar mensagem | Lembrete de skills no contexto |
 | 4 | PreCommit | `.husky/pre-commit` | Antes de `git commit` | lint + check + gitleaks |
 | 5 | PrePR | `.husky/pre-push` | Antes de `git push` | verify + security + OWASP + complexity |
