@@ -123,13 +123,19 @@ Princípio: **"One sub-agent drafts the change. A separate one verifies it."**
 
 | # | Subagente | Papel | Modelo | Ferramentas |
 |---|-----------|-------|--------|-------------|
-| 1 | Drafter | Implementa a mudança | `deepseek-chat` | edit_file, write_file, bash |
-| 2 | Verifier | Verifica independentemente (não confia no drafter) | `deepseek-chat` | read_file, bash, grep |
-| 3 | Judge | Decide se está pronto com base em evidências | `deepseek-reasoner` | read_file, read_evidence |
-| 4 | Security Auditor | Roda OWASP + gitleaks | `deepseek-chat` | bash, read_file, grep |
-| 5 | Complexity Auditor | Analisa complexidade + redundância | `deepseek-chat` | bash, read_file |
+| 1 | Drafter | Implementa a mudança | `deepseek-chat` | edit, write, bash |
+| 2 | Verifier | Verifica independentemente (não confia no drafter) | `deepseek-chat` | read, bash, grep |
+| 3 | Judge | Decide se está pronto com base em evidências | `deepseek-reasoner` | read, grep |
+| 4 | Security Auditor | Roda OWASP + gitleaks | `deepseek-chat` | bash, read, grep |
+| 5 | Complexity Auditor | Analisa complexidade + redundância | `deepseek-chat` | bash, read |
 
-**Localização:** definidos em `harness.config.yml`, seção `subagents`.
+**Como isso funciona no DSH:** estes papéis são uma **intenção de design**,
+documentada em `harness.config.yml` — que é um documento conceitual, sem
+efeito de runtime. O `@deepseek-ai/dsh-subagent` é o Service Definition do
+seam `ctx.subagents` e não expõe config `agents`; o mecanismo nativo para
+papéis nomeados é **Agent Presets** (um diretório com `agent.cordis.yml`).
+Na prática, cada papel se realiza chamando a tool `subagent` com um prompt
+distinto.
 
 **Regra de ouro:** nunca deixe o mesmo subagente que produziu verificar.
 
@@ -159,38 +165,52 @@ seção 5.
 | 5 | AI Gateway | Guardrails + rate limit + log com redaction. | owasp-check A03, A10 |
 | 6 | OWASP | Top 10 verificado. | `scripts/owasp-check.sh` |
 | 7 | Prompt Injection | Input sanitizado antes de LLM. | owasp-check A03 |
-| 8 | Deploy | Staging → smoke → aprovação → prod. | `require_approval: true` |
+| 8 | Deploy | Staging → smoke → aprovação → prod. | `.github/workflows/release.yml` + environment protegido |
 
 **Onde os gates são aplicados:**
 
-- **Pre-commit hook** → Gate 1
-- **Post-edit hook** → Gates 2, 3
-- **Pre-PR hook** → Gates 1, 2, 3, 4, 5, 6, 7
-- **Pre-deploy hook** → Gates 1, 6
-- **Pre-deploy-production hook** → Gate 8 (approval gate)
-- **Post-deploy hook** → verificação final
+| Gate | Onde |
+|------|------|
+| `.husky/pre-commit` | Gate 1 — lint, type check e gitleaks nos arquivos staged |
+| Hook `PostToolUse` (`.agents/hooks.json`) | Gates 2, 3 — feedback no contexto do agente após cada edição |
+| `.husky/pre-push` | Gates 1, 2, 3, 4, 5, 6, 7 — verify + security + OWASP + complexidade |
+| `.github/workflows/ci.yml` | Repete todos os gates no CI (fonte da verdade) |
+| Environment protegido no GitHub | Gate 8 — aprovação de deploy em produção |
+
+Nenhum desses é o `require_approval` do `harness.config.yml`: aquele
+bloco é documentação de intenção, sem efeito de runtime.
 
 ---
 
 ## 6. Hooks
 
-Disparados em momentos específicos do ciclo do agente.
+O bundle registra **um** bridge de hooks — `@deepseek-ai/dsh-hooks-claude-code`
+— via `cordis.patch.yml`, configurado por `.agents/hooks.json`. Os gates
+que não são eventos do bridge vivem nos hooks de git.
 
-| # | Hook | Quando dispara | Ação |
-|---|------|----------------|------|
-| 1 | `PreToolUse` | Antes de edit_file/write_file/str_replace | `scripts/pre-edit-check.sh $FILE` |
-| 2 | `PostToolUse` | Depois de edit_file/write_file/str_replace | `scripts/post-edit-check.sh $FILE` |
-| 3 | `PreCommit` | Antes de `git commit` | lint + check + gitleaks |
-| 4 | `PrePR` | Antes de abrir PR | verify + security + owasp + complexity |
-| 5 | `PreDeploy` | Antes de deploy staging | verify + security |
-| 6 | `PreDeployProduction` | Antes de deploy prod | security + owasp + **approval gate** |
-| 7 | `PostDeploy` | Depois de deploy | `scripts/smoke-test.sh $ENV` |
-| 8 | `UserPromptSubmit` | Ao enviar mensagem | Lembrete de skills |
+| # | Gate | Onde vive | Quando dispara | Ação |
+|---|------|-----------|----------------|------|
+| 1 | `PreToolUse` | `.agents/hooks.json` | Antes de `edit`/`write`/`str_replace` | `scripts/pre-edit-check.sh` via `hook-dispatch.mjs` |
+| 2 | `PostToolUse` | `.agents/hooks.json` | Depois de `edit`/`write`/`str_replace` | `scripts/post-edit-check.sh` via `hook-dispatch.mjs` |
+| 3 | `UserPromptSubmit` | `.agents/hooks.json` | Ao enviar mensagem | Lembrete de skills no contexto |
+| 4 | PreCommit | `.husky/pre-commit` | Antes de `git commit` | lint + check + gitleaks |
+| 5 | PrePR | `.husky/pre-push` | Antes de `git push` | verify + security + OWASP + complexity |
+| 6 | PreDeploy / PostDeploy | `.github/workflows/` | No pipeline de deploy | verify + security + smoke test |
 
-**Localização:** `harness.config.yml`, seção `hooks`.
+**Localização:** a linha do bridge fica em `cordis.patch.yml`; a
+configuração dos eventos fica em `.agents/hooks.json`.
 
-**Regra:** hooks devem rodar em <10s. Verificações longas vão para
-hooks de PR ou deploy.
+**Eventos que o bridge suporta:** `SessionStart`, `UserPromptSubmit`,
+`PreToolUse`, `PostToolUse`, `Stop`, `SubagentStart`, `SubagentStop`.
+`PreCommit`, `PrePR`, `PreDeploy` e `PostDeploy` **não** são eventos do
+bridge — por isso estão nos hooks de git e no CI.
+
+**Contrato:** os hooks recebem o payload como **JSON no stdin**. Exit `2`
+bloqueia; qualquer outro exit é não-bloqueante. Os checks deste kit são
+guias, então `hook-dispatch.mjs` sempre sai com código 0.
+
+**Regra:** hooks devem rodar rápido. Verificações longas (lint, testes,
+scan de segurança) vão para os hooks de git ou para o CI.
 
 ---
 

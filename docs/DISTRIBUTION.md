@@ -139,24 +139,47 @@ O `package.json` do projeto já contém os campos necessários:
 
 ### 2.3 — `cordis.patch.yml` (já criado)
 
-O `cordis.patch.yml` registra skills, subagentes e hooks. Ele referencia
-o `dsh-skills-bridge` para expor as skills do harness:
+O `cordis.patch.yml` é a camada que o DSH aplica quando o bundle entra em
+`dsh.profile.bundles`. O dialeto é um array YAML de entradas de patch do
+loader (`@deepseek-ai/cordis-plugin-include`), e só existem duas formas:
+
+| Forma | Efeito |
+|-------|--------|
+| `- insert: [ {id, name, config} ]` | **Adiciona** linhas novas de plugin |
+| `- id: <row-existente>` + `config` | **Sobrescreve** a config de uma linha existente |
+| `- id: <row-existente>` + `name` | **Assere** o nome da linha alvo |
+
+> ⚠️ `name` numa entrada de topo (sem `insert`) **não adiciona plugin**.
+> É uma asserção de que a linha alvo já tem aquele nome. Um patch assim,
+> apontando para um `id` que não existe, vira um no-op com o warning
+> `patch: entry ... not found` — a instalação parece bem-sucedida e não
+> registra nada.
+
+Este kit insere **uma** linha: o bridge de hooks.
 
 ```yaml
-- id: sveltekit-cloudflare-skills
-  name: dsh-skills-bridge
-  config:
-    skillDirs:
-      - ".agents/skills"
-    includeDefaultRoots: false
-    providerName: "sveltekit-cloudflare"
-    watch: true
+- insert:
+    - id: sveltekit-cloudflare-hooks
+      name: '@deepseek-ai/dsh-hooks-claude-code'
+      config:
+        configPath: './.agents/hooks.json'
 ```
 
-**Nota:** o `dsh-skills-bridge` **não é declarado como dependência** do
-seu bundle. Ele é um plugin separado que o usuário final instala. Isso é
-intencional: bundles são camadas de configuração que compõem plugins, não
-que os empacotam juntos. [reference:3]
+**Skills não precisam de linha.** O `dsh-base` já monta
+`@deepseek-ai/dsh-skill-filesystem` com `includeDefaultRoots: true`, que
+descobre `<projectRoot>/.agents/skills` automaticamente. Registrar um
+provider próprio seria redundante — e `customSkillDirs` resolve contra o
+cwd do processo, não contra a raiz do pacote instalado. O que cada skill
+exige é frontmatter YAML com `name` e `description`; sem ele o arquivo é
+ignorado com warning.
+
+**Subagentes também não.** `@deepseek-ai/dsh-subagent` é o Service
+Definition do seam `ctx.subagents` e não expõe config `agents`. Papéis
+nomeados no DSH são **Agent Presets** (um diretório com `agent.cordis.yml`
+descoberto pelos preset roots), não linhas de bundle.
+
+**PreCommit e PrePR não são eventos do bridge de hooks.** Vivem nos hooks
+de git: `.husky/pre-commit` e `.husky/pre-push`.
 
 ### 2.4 — Passo a passo de publicação
 
@@ -522,7 +545,8 @@ da versão para criar a GitHub Release. Ver `docs/SETUP.md` para o formato.
 
 ### Bundles de referência
 
-- `dsh-skills-bridge`: github.com/deepseek-ai/deepseek-harness/discussions/3556
+- Bundle base do DSH: github.com/deepseek-ai/deepseek-harness/tree/master/packages/bundle/base
+- Bridge de hooks: github.com/deepseek-ai/deepseek-harness/tree/master/packages/hooks/hooks-claude-code
 - `dsh-dream-skin`: github.com/RevolutionLA/dsh-dream-skin
 - `dsh-plugin-marketplace`: github.com/Scorp1o117/dsh-plugin-marketplace
 - `DSH-Store`: github.com/AI-Scarlett/DSH-Store

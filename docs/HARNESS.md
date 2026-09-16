@@ -334,6 +334,14 @@ subagents:
 **Princípio:** "One sub-agent drafts the change. A separate one
 verifies it." — Addy Osmani.
 
+> **Nota sobre o DSH real:** papéis nomeados como estes **não** são
+> declarados em `harness.config.yml`. O `@deepseek-ai/dsh-subagent` é o
+> Service Definition do seam `ctx.subagents` e não expõe config `agents`.
+> O mecanismo nativo para papéis é **Agent Presets** — um diretório com
+> `agent.cordis.yml`, descoberto pelos preset roots. O bloco abaixo
+> documenta a **intenção de design** (um rascunha, outro verifica), que na
+> prática se realiza chamando a tool `subagent` com prompts distintos.
+
 **Escolha de modelo:**
 - `deepseek-chat` — rápido, bom para drafting e verificação.
 - `deepseek-reasoner` — mais lento, melhor para juiz (decisões
@@ -341,53 +349,73 @@ verifies it." — Addy Osmani.
 
 ### 5.3 — hooks
 
+Os hooks deste kit são registrados pelo bridge
+`@deepseek-ai/dsh-hooks-claude-code`, inserido como linha de bundle em
+`cordis.patch.yml` e configurado por `.agents/hooks.json`:
+
 ```yaml
-hooks:
-  PreToolUse:
-    - match: "edit_file|write_file|str_replace"
-      run: "./scripts/pre-edit-check.sh $FILE"
-
-  PostToolUse:
-    - match: "edit_file|write_file|str_replace"
-      run: "./scripts/post-edit-check.sh $FILE"
-
-  PreCommit:
-    - run: "pnpm lint && pnpm check"
-    - run: "gitleaks protect --staged --redact --config .gitleaks.toml"
-
-  PrePR:
-    - run: "./scripts/verify.sh"
-    - run: "./scripts/security-scan.sh"
-    - run: "./scripts/owasp-check.sh"
-    - run: "./scripts/complexity-check.sh"
-
-  PreDeploy:
-    - run: "./scripts/verify.sh"
-    - run: "./scripts/security-scan.sh"
-
-  PreDeployProduction:
-    - run: "./scripts/security-scan.sh"
-    - require_approval: true
-
-  PostDeploy:
-    - run: "./scripts/smoke-test.sh $ENV"
+- insert:
+    - id: sveltekit-cloudflare-hooks
+      name: '@deepseek-ai/dsh-hooks-claude-code'
+      config:
+        configPath: './.agents/hooks.json'
 ```
 
-**Tipos de hook disponíveis:**
+O arquivo usa o formato do Claude Code. O payload do evento chega como
+**JSON no stdin** do comando — não como argumento posicional. Por isso os
+comandos chamam `scripts/hook-dispatch.mjs`, que extrai
+`tool_input.file_path` e injeta a saída do check no contexto do modelo via
+`hookSpecificOutput.additionalContext`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "edit|write|str_replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hook-dispatch.mjs\" \"$CLAUDE_PROJECT_DIR/scripts/pre-edit-check.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Eventos suportados pelo bridge:**
 
 | Hook | Quando dispara |
 |------|----------------|
-| `PreToolUse` | Antes de qualquer tool call |
-| `PostToolUse` | Depois de tool call bem-sucedido |
-| `PreCommit` | Antes de `git commit` |
-| `PrePR` | Antes de abrir PR |
-| `PreDeploy` | Antes de deploy staging |
-| `PreDeployProduction` | Antes de deploy produção (com `require_approval`) |
-| `PostDeploy` | Depois de deploy |
+| `SessionStart` | Ao iniciar a sessão |
 | `UserPromptSubmit` | Quando você envia uma mensagem |
+| `PreToolUse` | Antes de uma tool call |
+| `PostToolUse` | Depois de uma tool call |
+| `Stop` | Ao encerrar o turno |
+| `SubagentStart` | Ao iniciar um subagente |
+| `SubagentStop` | Ao encerrar um subagente |
 
-**Regra:** hooks devem ser **rápidos** (<10s). Verificações longas vão
-para hooks de PR ou deploy.
+O matcher casa contra o **nome da tool** (`edit`, `write`, ...), e
+`CLAUDE_PROJECT_DIR` é exportado no ambiente do processo do hook.
+
+**Contrato de saída:** exit `2` **bloqueia**, com o stderr virando o
+motivo; qualquer outro exit é erro não-bloqueante. Os checks deste kit são
+guias, não gates rígidos — `hook-dispatch.mjs` sempre sai com código 0.
+
+**PreCommit, PrePR, PreDeploy e PostDeploy não são eventos do bridge.**
+Eles vivem onde a ação realmente acontece:
+
+| Gate | Onde vive |
+|------|-----------|
+| PreCommit | `.husky/pre-commit` |
+| PrePR | `.husky/pre-push` |
+| PreDeploy / PostDeploy | `.github/workflows/` |
+
+**Regra:** hooks devem ser **rápidos**. Verificações longas (lint, testes,
+scan de segurança) vão para os hooks de git ou para o CI.
 
 ### 5.4 — goals
 

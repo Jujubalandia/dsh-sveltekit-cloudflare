@@ -1,5 +1,22 @@
 # DeepSeek Harness project config — v2
-# Copie para $DSH_HOME/projects/<projeto>/harness.config.yml
+#
+# ⚠️ DOCUMENTO CONCEITUAL — o DSH NÃO lê este arquivo.
+#
+# A configuração real do DSH vem de:
+#   - o profile em $DSH_HOME/profiles/<nome>/
+#   - a camada do bundle em cordis.patch.yml
+#   - os schemas exportados por cada plugin
+#
+# Este arquivo descreve a INTENÇÃO de operação do harness (papéis,
+# gates por risco, limites de sandbox). Os blocos `subagents:`, `hooks:`,
+# `sandbox:`, `review:` e `goals:` são documentação de design — nenhum
+# deles tem efeito de runtime.
+#
+# Para o que é executável de verdade, veja:
+#   - cordis.patch.yml        → plugins que o bundle monta
+#   - .agents/hooks.json      → hooks do bridge (eventos suportados apenas)
+#   - .husky/pre-commit|pre-push → gates de commit e de PR
+#   - .agents/goals/current.md   → template de critérios de verificação
 
 project:
   name: sveltekit-cloudflare
