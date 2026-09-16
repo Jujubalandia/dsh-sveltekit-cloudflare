@@ -94,6 +94,11 @@ paths = [
   '''wrangler\..*\.toml$''',
   '''\.dev\.vars\.example$''',
   '''\.env\.example$''',
+  # A skill security-leaks ensina o que NÃO fazer: ela contém, de
+  # propósito, exemplos de API key e de JWT secret numa seção
+  # "Anti-pattern". Mesmo caso de .env.example e wrangler.toml acima —
+  # conteúdo cuja finalidade é ser exemplo.
+  '''\.agents/skills/security-leaks/SKILL\.md$''',
   '''node_modules/.*''',
   '''\.svelte-kit/.*''',
   '''build/.*''',
