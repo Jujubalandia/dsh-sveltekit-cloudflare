@@ -32,8 +32,8 @@ subagents:
   drafter:
     model: deepseek-chat
     tools:
-      - edit_file
-      - write_file
+      - edit
+      - write
       - bash
     description: "Implementa a mudança"
     system_prompt: |
@@ -43,7 +43,7 @@ subagents:
   verifier:
     model: deepseek-chat
     tools:
-      - read_file
+      - read
       - bash
       - grep
     description: "Verifica independentemente. Não confia no drafter."
@@ -57,8 +57,8 @@ subagents:
   judge:
     model: deepseek-reasoner
     tools:
-      - read_file
-      - read_evidence
+      - read
+      - grep
     description: "Decide se a tarefa está pronta com base em evidências."
     system_prompt: |
       Você decide se a tarefa pode ser declarada concluída. Baseie-se
@@ -69,7 +69,7 @@ subagents:
     model: deepseek-chat
     tools:
       - bash
-      - read_file
+      - read
       - grep
     description: "Roda OWASP check e gitleaks."
     system_prompt: |
@@ -80,7 +80,7 @@ subagents:
     model: deepseek-chat
     tools:
       - bash
-      - read_file
+      - read
     description: "Roda análise de complexidade e duplicação."
     system_prompt: |
       Execute scripts/complexity-check.sh. Reporte funções com complexidade
@@ -92,12 +92,12 @@ subagents:
 # ------------------------------------------------------------------
 hooks:
   PreToolUse:
-    - match: "edit_file|write_file|str_replace"
+    - match: "edit|write"
       description: "Ler arquivo, verificar gates, carregar skill relevante."
       run: "./scripts/pre-edit-check.sh $FILE"
 
   PostToolUse:
-    - match: "edit_file|write_file|str_replace"
+    - match: "edit|write"
       description: "Type check + lint + teste focado no arquivo modificado."
       run: "./scripts/post-edit-check.sh $FILE"
 

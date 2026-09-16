@@ -5,7 +5,7 @@
 # Uso:
 #   ./scripts/post-edit-check.sh <caminho-do-arquivo>
 #
-# Chamado pelo harness (hook PostToolUse) depois de edit_file/write_file.
+# Chamado pelo harness (hook PostToolUse) depois de edit/write.
 # Objetivo:
 #   - Rodar type check no projeto
 #   - Rodar lint

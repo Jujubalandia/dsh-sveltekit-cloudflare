@@ -5,7 +5,7 @@
 # Uso:
 #   ./scripts/pre-edit-check.sh <caminho-do-arquivo>
 #
-# Chamado pelo harness (hook PreToolUse) antes de edit_file/write_file.
+# Chamado pelo harness (hook PreToolUse) antes de edit/write.
 # Objetivo:
 #   - Classificar o arquivo por área (server, d1, kv, r2, ai, auth, etc.)
 #   - Lembrar o agente de carregar a skill relevante

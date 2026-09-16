@@ -1,8 +1,19 @@
 name: CI
 
 # ------------------------------------------------------------------
-# Dispara em PRs e pushes na main/develop
-# Pipeline: gitleaks → check → lint → test:coverage → build → audit
+# Dispara em PRs e pushes na main/develop.
+#
+# Este repositório é um BUNDLE de harness DSH, não um app SvelteKit
+# completo: não há src/, não há pnpm-lock.yaml e o bundle não tem
+# etapa de build. Então o CI valida os contratos do bundle, que são
+# o que de fato pode quebrar em silêncio:
+#
+#   1. kit-validate  — package.json, cordis.patch.yml, skills, hooks
+#   2. secrets-scan  — gitleaks
+#
+# Os gates de aplicação (typecheck, lint, testes, e2e) pertencem a um
+# projeto que use este kit como scaffold, não a este pacote. Veja a
+# seção "Reativando os gates de aplicação" no fim do arquivo.
 # ------------------------------------------------------------------
 
 on:
@@ -12,224 +23,121 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
-# ------------------------------------------------------------------
-# Cancelar runs antigas da mesma branch/PR
-# ------------------------------------------------------------------
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# ------------------------------------------------------------------
-# Permissões mínimas
-# ------------------------------------------------------------------
 permissions:
   contents: read
   pull-requests: read
-  security-events: write
 
 jobs:
   # ================================================================
-  # Job 1 — Secrets scan (roda primeiro, mais rápido)
+  # Job 1 — Integridade do bundle
+  # ================================================================
+  kit-validate:
+    name: Validar o bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # O validador usa `yaml` quando disponível para checar o
+      # cordis.patch.yml de verdade; sem ele degrada para uma
+      # checagem estrutural. Instalamos para ter a validação completa.
+      # --ignore-scripts evita rodar o `prepare` do próprio pacote.
+      - name: Instalar dependência de validação
+        run: npm install --no-save --ignore-scripts yaml
+
+      - name: Validar integridade do kit
+        run: node scripts/validate-kit.mjs
+
+      - name: Conferir o que vai no pacote npm
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack.txt
+          for need in cordis.patch.yml lib/commands.mjs .agents/hooks.json .agents/skills; do
+            if ! grep -q "$need" /tmp/pack.txt; then
+              echo "❌ '$need' não está no tarball — verifique o campo 'files' do package.json"
+              exit 1
+            fi
+          done
+          echo "✅ Todos os artefatos obrigatórios estão no tarball"
+
+  # ================================================================
+  # Job 2 — Secrets scan
   # ================================================================
   secrets-scan:
     name: Secrets scan (gitleaks)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: .gitleaks.toml
-          GITLEAKS_ENABLE_COMMENTS: true
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
-
-  # ================================================================
-  # Job 2 — Verificação completa
-  # ================================================================
-  verify:
-    name: Verify (typecheck, lint, tests, build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [secrets-scan]
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Instalar dependências
-        run: pnpm install --frozen-lockfile
-
-      # ------------------------------------------------------------
-      # 1. Type check
-      # ------------------------------------------------------------
-      - name: Type check
-        run: pnpm check
-
-      # ------------------------------------------------------------
-      # 2. Lint
-      # ------------------------------------------------------------
-      - name: Lint
-        run: pnpm lint
-
-      # ------------------------------------------------------------
-      # 3. Unit tests + coverage
-      # ------------------------------------------------------------
-      - name: Unit tests + coverage
-        run: pnpm test:coverage
-
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage/
-          retention-days: 7
-
-      # ------------------------------------------------------------
-      # 4. Build de produção
-      # ------------------------------------------------------------
-      - name: Build
-        run: pnpm build
-        env:
-          NODE_ENV: production
-
-      # ------------------------------------------------------------
-      # 5. Audit de dependências
-      # ------------------------------------------------------------
-      - name: Audit de dependências
-        run: pnpm audit --audit-level high
-        continue-on-error: true
-
-  # ================================================================
-  # Job 3 — E2E (Playwright)
-  # ================================================================
-  e2e:
-    name: E2E (Playwright)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    needs: [verify]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Instalar browsers do Playwright
-        run: pnpm exec playwright install --with-deps chromium firefox
-
-      - name: Build
-        run: pnpm build
-        env:
-          NODE_ENV: production
-
-      - name: E2E tests
-        run: pnpm test:e2e
-        env:
-          CI: "true"
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
-      - name: Upload traces (falhas)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-traces
-          path: test-results/
-          retention-days: 7
-
-  # ================================================================
-  # Job 4 — OWASP + complexidade (informativo, não bloqueia merge)
-  # ================================================================
-  quality-audit:
-    name: OWASP + Complexity (informativo)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [verify]
-    continue-on-error: true
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
+      # Instalamos o binário direto em vez de usar
+      # gitleaks/gitleaks-action@v2: a action falha com
+      # "stderr is not empty" em runners recentes, porque trata
+      # qualquer warning do Node no stderr como erro fatal.
+      # Aqui só o exit code do gitleaks decide.
       - name: Instalar gitleaks
+        env:
+          GITLEAKS_VERSION: 8.21.2
         run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64.tar.gz \
-            | tar -xz -C /usr/local/bin gitleaks
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
           gitleaks version
 
-      - name: OWASP Top 10 check
+      - name: Escanear o histórico
         run: |
-          chmod +x scripts/owasp-check.sh
-          ./scripts/owasp-check.sh
-        continue-on-error: true
-
-      - name: Complexity check
-        run: |
-          chmod +x scripts/complexity-check.sh
-          ./scripts/complexity-check.sh
-        continue-on-error: true
+          # `git` é o subcomando atual; `detect` é o antigo. Usamos o
+          # que existir na versão instalada.
+          if gitleaks git --help >/dev/null 2>&1; then
+            gitleaks git --source . --config .gitleaks.toml --redact --verbose
+          else
+            gitleaks detect --source . --config .gitleaks.toml --redact --verbose
+          fi
 
   # ================================================================
-  # Job 5 — Gate final (todos os jobs obrigatórios passaram)
+  # Job 3 — Gate final
   # ================================================================
   ci-success:
     name: CI success gate
     runs-on: ubuntu-latest
-    needs: [secrets-scan, verify, e2e]
+    needs: [kit-validate, secrets-scan]
     if: always()
     steps:
       - name: Verificar status dos jobs obrigatórios
         run: |
+          if [ "${{ needs.kit-validate.result }}" != "success" ]; then
+            echo "❌ kit-validate falhou"
+            exit 1
+          fi
           if [ "${{ needs.secrets-scan.result }}" != "success" ]; then
             echo "❌ secrets-scan falhou"
             exit 1
           fi
-          if [ "${{ needs.verify.result }}" != "success" ]; then
-            echo "❌ verify falhou"
-            exit 1
-          fi
-          if [ "${{ needs.e2e.result }}" != "success" ]; then
-            echo "❌ e2e falhou"
-            exit 1
-          fi
           echo "✅ Todos os gates de CI passaram"
+
+# ==================================================================
+# Reativando os gates de aplicação
+# ==================================================================
+# Quando este kit for usado como base de um projeto SvelteKit de
+# verdade (com src/, pnpm-lock.yaml e node_modules), acrescente de
+# volta os jobs de aplicação, todos com `needs: [kit-validate]`:
+#
+#   - pnpm install --frozen-lockfile
+#   - pnpm check      (svelte-check)
+#   - pnpm lint       (prettier + eslint)
+#   - pnpm test:coverage
+#   - pnpm build
+#   - pnpm test:e2e   (Playwright)
+#
+# Eles não rodam aqui porque dependem de artefatos que este pacote
+# deliberadamente não contém.

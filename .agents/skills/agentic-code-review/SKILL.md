@@ -266,7 +266,7 @@ Antes da revisão humana, um subagente faz triagem.
 # harness.config.yml — subagente triage
 triage:
   model: deepseek-chat
-  tools: [read_file, bash, grep]
+  tools: [read, bash, grep]
   system_prompt: |
     Você tria PRs. NÃO decide merge. Classifique em:
 

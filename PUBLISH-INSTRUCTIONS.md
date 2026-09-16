@@ -25,8 +25,9 @@ O `npm pack --dry-run` deve listar no mínimo:
 
 - `package.json`
 - `cordis.patch.yml`
-- `.agents/` (as 12 skills + `hooks.json`)
-- `scripts/` (os 8 `.sh` + `hook-dispatch.mjs`)
+- `lib/` (o plugin dos comandos `/sveflare-*`)
+- `.agents/` (as 12 skills + `hooks.json` + `commands/` + `templates/`)
+- `scripts/` (os 8 `.sh` + `hook-dispatch.mjs` + `validate-kit.mjs`)
 - `docs/`
 - `AGENTS.md`
 - `harness.config.yml`
@@ -121,10 +122,11 @@ permissão de build é necessária.
 
 ```bash
 # A camada do bundle deve aparecer com um comentário "# == ..."
-dsh --profile web --dump-config | grep -i sveltekit-cloudflare
+dsh --profile web --dump-config | grep -i sveflare
 
-# A linha de hooks inserida pelo bundle deve estar na árvore
-dsh --profile web --dump-config | grep sveltekit-cloudflare-hooks
+# As duas linhas inseridas pelo bundle devem estar na árvore
+dsh --profile web --dump-config | grep sveflare-commands
+dsh --profile web --dump-config | grep sveflare-hooks
 
 # O bridge de hooks deve estar montado com o nome real do pacote
 dsh --profile web --dump-config | grep dsh-hooks-claude-code
@@ -133,10 +135,25 @@ dsh --profile web --dump-config | grep dsh-hooks-claude-code
 O que você deve ver:
 
 ```yaml
-- id: sveltekit-cloudflare-hooks
+- id: sveflare-commands
+  name: './lib/commands.mjs'
+  config:
+    commands:
+      - name: sveflare-spec
+        file: .agents/commands/sveflare-spec.md
+      # ... plan, goal, verify, ship
+
+- id: sveflare-hooks
   name: '@deepseek-ai/dsh-hooks-claude-code'
   config:
     configPath: './.agents/hooks.json'
+```
+
+Com o bundle ativo, os cinco comandos aparecem na sessão:
+
+```text
+/sveflare-spec     /sveflare-plan   /sveflare-goal
+/sveflare-verify   /sveflare-ship
 ```
 
 **Sinais de problema:**
@@ -147,6 +164,15 @@ O que você deve ver:
 | camada não aparece no dump | `dsh.bundle.patch` ausente/errado no `package.json` |
 | `could not load hook config` | `configPath` não resolve contra o cwd do processo DSH |
 | nenhuma skill no catálogo | `SKILL.md` sem frontmatter `name` + `description` |
+| `/sveflare-*` não aparecem | linha `sveflare-commands` ausente, ou `config.commands[].file` apontando para arquivo inexistente |
+| `lib/commands.mjs` não resolve | o diretório `lib/` ficou fora do campo `files` do `package.json` |
+
+Antes de publicar, valide a integridade do kit — esse script pega
+justamente os erros silenciosos acima:
+
+```bash
+node scripts/validate-kit.mjs
+```
 
 Teste automatizado de instalação:
 
@@ -175,11 +201,20 @@ você passou no `add`).
 
 **Faz:**
 
-- Insere a linha `sveltekit-cloudflare-hooks`, montando
+- Insere a linha `sveflare-commands`, montando o plugin `lib/commands.mjs`
+  que registra os cinco comandos `/sveflare-*` a partir dos prompts em
+  `.agents/commands/*.md`.
+- Insere a linha `sveflare-hooks`, montando
   `@deepseek-ai/dsh-hooks-claude-code` apontando para `.agents/hooks.json`.
 - Entrega 12 skills em `.agents/skills/`, descobertas pelo
   `@deepseek-ai/dsh-skill-filesystem` que o `dsh-base` já monta com
   `includeDefaultRoots: true`.
+
+**Por que os comandos precisam de um plugin:** o `@deepseek-ai/dsh-commands`
+é um registry em que cada plugin se registra **por código**
+(`ctx.commands.register(definition)`). Ele não tem schema de configuração e
+**nada no DSH varre `.agents/commands/`** — por isso o bundle traz
+`lib/commands.mjs`, que lê os prompts e os registra.
 
 **Não faz (e por quê):**
 
@@ -198,9 +233,11 @@ você passou no `add`).
 ## 7. Checklist de publicação
 
 - [ ] `git status` limpo, no commit desejado
-- [ ] `npm pack --dry-run` lista `cordis.patch.yml` e `.agents/`
+- [ ] `node scripts/validate-kit.mjs` passa sem falhas
+- [ ] `npm pack --dry-run` lista `cordis.patch.yml`, `lib/` e `.agents/`
 - [ ] `./test-install.sh` passa num ambiente com `dsh` no PATH
 - [ ] `npm view @jujubalandia/dsh-sveltekit-cloudflare` ainda não existe (ou a versão é nova)
 - [ ] `npm publish --access public`
 - [ ] `dsh plugin --profile web add @jujubalandia/dsh-sveltekit-cloudflare` funciona a partir de outro diretório
+- [ ] Os cinco `/sveflare-*` aparecem na sessão após a instalação
 - [ ] Repositório no GitHub marcado como **Template** se você quiser que ele sirva de scaffold

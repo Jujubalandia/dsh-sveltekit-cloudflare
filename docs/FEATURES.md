@@ -29,6 +29,8 @@ renomear um componente.
 10. [Configuração](#10-configuração)
 11. [Tabela: manter / adaptar / remover](#11-tabela-manter--adaptar--remover)
 12. [Checklist de completude](#12-checklist-de-completude)
+13. [Comandos](#13-Comandos)
+14. [Templates](#14-Templates)
 
 ---
 
@@ -46,6 +48,8 @@ renomear um componente.
 | Documentos | 8 |
 | Arquivos de configuração | 6 |
 | Migrations | 2 |
+| Comandos | 5 |
+| Templates | 2 |
 
 ---
 
@@ -513,6 +517,121 @@ Use este checklist para verificar que o kit está íntegro.
 - [ ] Skill é carregada sob demanda (testado)
 - [ ] Hook dispara em edição (testado)
 
+## 13. Comandos
+
+Comandos são pontos de entrada para os fluxos SDLC. Cada um carrega um
+prompt estruturado que ativa subagentes específicos e produz artefatos
+definidos.
+
+| # | Comando | Propósito | Arquivo | Modelo |
+|---|---------|-----------|---------|--------|
+| 1 | `/sveflare-spec` | Especificação estruturada de feature | `.agents/commands/sveflare-spec.md` | `deepseek-chat` |
+| 2 | `/sveflare-plan` | Plano técnico a partir da spec | `.agents/commands/sveflare-plan.md` | `deepseek-reasoner` |
+| 3 | `/sveflare-goal` | Trava escopo de tarefa atômica | `.agents/commands/sveflare-goal.md` | `deepseek-chat` |
+| 4 | `/sveflare-verify` | Pipeline completo de verificação | `.agents/commands/sveflare-verify.md` | `deepseek-chat` |
+| 5 | `/sveflare-ship` | Validação + deploy + monitoramento | `.agents/commands/sveflare-ship.md` | `deepseek-reasoner` |
+
+**Localização:** `.agents/commands/`
+**Registro:** `cordis.patch.yml`, seção `sveflare-commands`
+**Uso detalhado:** `docs/USAGE.md`, seção 3.
+
+### Fluxo SDLC completo
+
+```text
+/sveflare-spec  →  docs/SPEC.md
+       ↓
+/sveflare-plan  →  docs/PLAN.md
+       ↓
+/sveflare-goal  →  .agents/goals/current.md  (por tarefa)
+       ↓
+(implementação)
+       ↓
+/sveflare-verify  →  relatório de verificação
+       ↓
+/sveflare-ship  →  deploy + monitoramento
+```
+
+### Quando usar cada um
+
+| Situação | Comando |
+|----------|---------|
+| Iniciar uma feature nova | `/sveflare-spec` |
+| Converter spec aprovada em plano | `/sveflare-plan` |
+| Iniciar uma tarefa atômica | `/sveflare-goal` |
+| Verificar antes de PR | `/sveflare-verify` |
+| Verificar antes de deploy | `/sveflare-verify` |
+| Deployar para staging/produção | `/sveflare-ship` |
+
+### Estrutura de um arquivo de comando
+
+Cada comando é um markdown com frontmatter YAML:
+
+```markdown
+---
+name: sveflare-spec
+description: Inicia especificação estruturada (SPEC.md)
+argument-hint: <descrição da feature>
+allowed-tools: read, write, edit, grep, bash
+model: deepseek-chat
+---
+
+<corpo do prompt>
+```
+
+| Campo | Obrigatório | Propósito |
+|-------|-------------|-----------|
+| `name` | sim | Nome do comando (sem prefixo) |
+| `description` | sim | Texto no autocomplete |
+| `argument-hint` | opcional | Placeholder do argumento |
+| `allowed-tools` | opcional | Restringe tools disponíveis |
+| `model` | opcional | Força modelo específico |
+
+---
+
+## 14. Templates
+
+Templates são arquivos base reutilizáveis. **Não são carregados
+automaticamente** — são copiados por comandos ou manualmente.
+
+| # | Template | Propósito | Localização | Usado por |
+|---|----------|-----------|-------------|-----------|
+| 1 | `SPEC.md` | Base para `docs/SPEC.md` | `.agents/templates/SPEC.md` | `/sveflare-spec` |
+| 2 | `PLAN.md` | Base para `docs/PLAN.md` | `.agents/templates/PLAN.md` | `/sveflare-plan` |
+
+**Localização:** `.agents/templates/`
+
+### Como usar manualmente
+
+```bash
+# Copiar template de spec
+cp .agents/templates/SPEC.md docs/SPEC.md
+
+# Copiar template de plano
+cp .agents/templates/PLAN.md docs/PLAN.md
+
+# Editar, substituindo os <placeholders>
+```
+
+### Como usar via comando
+
+O comando `/sveflare-spec` faz isso automaticamente:
+
+1. Lê `.agents/templates/SPEC.md`.
+2. Preenche via subagente Drafter.
+3. Revisa via subagente Verifier.
+4. Salva em `docs/SPEC.md`.
+
+Mesma lógica para `/sveflare-plan` e o template `PLAN.md`.
+
+### Diferença entre template e goal
+
+| Aspecto | Template | Goal |
+|---------|----------|------|
+| Localização | `.agents/templates/` | `.agents/goals/current.md` |
+| Escopo | Feature inteira | 1 tarefa atômica |
+| Reutilizável? | Sim (copia sempre) | Não (sobrescrito por tarefa) |
+| Editado por | `/sveflare-spec`, `/sveflare-plan` | `/sveflare-goal` |
+
 ---
 
 ## Como usar este documento
@@ -544,3 +663,5 @@ Sempre que adicionar/remover um componente:
 - `docs/HARNESS.md` — arquitetura e extensão
 - `AGENTS.md` — regras operacionais
 - `CHANGELOG.md` — histórico de mudanças
+
+

@@ -312,12 +312,12 @@ Define os papéis de agentes que cooperam numa tarefa.
 subagents:
   drafter:
     model: deepseek-chat
-    tools: [edit_file, write_file, bash]
+    tools: [edit, write, bash]
     description: "Implementa a mudança"
 
   verifier:
     model: deepseek-chat
-    tools: [read_file, bash, grep]
+    tools: [read, bash, grep]
     description: "Verifica independentemente. Não confia no drafter."
     system_prompt: |
       Você é um verificador independente. Nunca assuma que o drafter
@@ -327,7 +327,7 @@ subagents:
 
   judge:
     model: deepseek-reasoner
-    tools: [read_file, read_evidence]
+    tools: [read, grep]
     description: "Decide se a tarefa está pronta com base em evidências."
 ```
 
@@ -355,7 +355,7 @@ Os hooks deste kit são registrados pelo bridge
 
 ```yaml
 - insert:
-    - id: sveltekit-cloudflare-hooks
+    - id: sveflare-hooks
       name: '@deepseek-ai/dsh-hooks-claude-code'
       config:
         configPath: './.agents/hooks.json'
@@ -493,6 +493,66 @@ review:
 
 Baseado em *Agentic Code Review* de Addy Osmani. Classifica PRs por
 risco e aplica nível de revisão proporcional.
+
+### 5.7 — commands
+
+> **Esta seção não vem do `harness.config.yml`.** Como a 5.3, ela
+> documenta uma linha da **camada de bundle**: o bloco abaixo vive no
+> `cordis.patch.yml`, o arquivo que o DSH lê quando o bundle entra em
+> `dsh.profile.bundles`.
+
+Os comandos `/sveflare-*` **não são descobertos do disco**. O
+`@deepseek-ai/dsh-commands` é um registry que pertence ao plugin: **não
+tem schema de configuração** e **nada no DSH varre `.agents/commands/`**.
+Um comando só passa a existir quando **código de plugin** o registra:
+
+```js
+ctx.commands.register({
+  name: 'sveflare-spec',            // /^[a-z][a-z0-9_-]*$/u, sem barra inicial
+  description: 'string não vazia',
+  input: { hint: '...' },           // opcional
+  handler: ({ agent, rawInput }) => { /* ... */ },
+})
+```
+
+O handler roda **sem enviar o comando ao modelo**. Para de fato acionar o
+modelo, ele precisa empurrar uma mensagem para o agente:
+`agent.steer(message)` **acorda o driver**, então o modelo responde de
+imediato — que é o comportamento que um slash command exige — enquanto
+`agent.inject(message)` apenas enfileira contexto, sem acordar ninguém.
+
+É por isso que este bundle traz `lib/commands.mjs`: ele lê os prompts em
+`.agents/commands/*.md`, separa o frontmatter do corpo e registra cada um
+como comando real. A linha do bundle só declara os pares `name`/`file`:
+
+```yaml
+- insert:
+    - id: sveflare-commands
+      name: './lib/commands.mjs'
+      config:
+        commands:
+          - name: sveflare-spec
+            file: .agents/commands/sveflare-spec.md
+          - name: sveflare-plan
+            file: .agents/commands/sveflare-plan.md
+          - name: sveflare-goal
+            file: .agents/commands/sveflare-goal.md
+          - name: sveflare-verify
+            file: .agents/commands/sveflare-verify.md
+          - name: sveflare-ship
+            file: .agents/commands/sveflare-ship.md
+```
+
+Dois detalhes que importam na prática:
+
+- O nome `./lib/commands.mjs` é resolvido pelo loader **relativo ao
+  próprio `cordis.patch.yml`**, então o mesmo caminho funciona tanto
+  rodando do repositório quanto instalado a partir do npm.
+- A `description` e o `argument-hint` de cada comando saem do frontmatter
+  do markdown correspondente. Um `description` declarado na config tem
+  precedência, e sem `config.commands` o plugin cai na lista padrão dos
+  cinco comandos do kit.
+
 
 ---
 

@@ -248,6 +248,91 @@ dsh
 
 ---
 
+## Depois de instalar
+
+Se você acabou de instalar o harness (via `dsh plugin add` ou via
+template), faça esta verificação rápida nos primeiros 5 minutos.
+
+### 1. Reinicie o DSH
+
+```bash
+dsh web
+```
+
+### 2. Verifique as skills
+
+Dentro da sessão, pergunte:
+
+```text
+Liste as skills disponíveis no seu catálogo.
+```
+
+**Esperado:** as 12 skills do harness (`cloudflare-d1`, `cloudflare-kv`,
+`cloudflare-r2`, `cloudflare-ai-gateway`, `sveltekit-runes`,
+`sveltekit-auth`, `cloudflare-security`, `owasp-top10`,
+`security-leaks`, `code-complexity`, `git-flow`,
+`agentic-code-review`).
+
+### 3. Verifique os comandos
+
+Digite `/sveflare` no prompt e pressione Tab.
+
+**Esperado:**
+
+```
+/sveflare-spec
+/sveflare-plan
+/sveflare-goal
+/sveflare-verify
+/sveflare-ship
+```
+
+### 4. Comece pelo comando certo
+
+| Situação | Comando |
+|----------|---------|
+| Iniciar feature nova | `/sveflare-spec` |
+| Converter spec aprovada em plano técnico | `/sveflare-plan` |
+| Iniciar uma tarefa atômica | `/sveflare-goal` |
+| Verificar antes de PR ou deploy | `/sveflare-verify` |
+| Deployar para staging/produção | `/sveflare-ship` |
+
+**Fluxo completo:**
+
+```text
+/sveflare-spec  →  docs/SPEC.md
+       ↓
+/sveflare-plan  →  docs/PLAN.md
+       ↓
+/sveflare-goal  →  .agents/goals/current.md  (por tarefa)
+       ↓
+(implementação com hooks automáticos)
+       ↓
+/sveflare-verify  →  relatório consolidado
+       ↓
+/sveflare-ship  →  deploy + monitoramento
+```
+
+### 5. Leia o guia de uso
+
+- **Uso diário e fluxos completos:** [`docs/USAGE.md`](docs/USAGE.md)
+- **Inventário de componentes:** [`docs/FEATURES.md`](docs/FEATURES.md)
+- **Arquitetura e extensão:** [`docs/HARNESS.md`](docs/HARNESS.md)
+- **Publicação e distribuição:** [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md)
+
+### Troubleshooting rápido
+
+| Sintoma | Causa provável | Solução |
+|---------|----------------|---------|
+| Nenhuma skill aparece | `SKILL.md` sem frontmatter YAML com `name` e `description` — o `@deepseek-ai/dsh-skill-filesystem`, montado pelo `dsh-base` com `includeDefaultRoots: true`, varre `.agents/skills` e ignora o arquivo | Adicionar o frontmatter no topo do `SKILL.md` (`name` precisa casar com `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`) |
+| Comandos `/sveflare-*` não aparecem | `cordis.patch.yml` sem a seção `sveflare-commands` | Reaplicar o `cordis.patch.yml` e reinstalar o bundle |
+| Agente ignora o `AGENTS.md` | DSH iniciado fora do workspace | Sempre iniciar com `dsh web` de dentro do projeto |
+| Hook não dispara | Scripts não executáveis | `chmod +x scripts/*.sh` |
+
+Guia completo em [`docs/USAGE.md`, seção 10](docs/USAGE.md#10-troubleshooting).
+
+---
+
 ## Licença
 
 (Defina conforme o projeto — MIT, Apache 2.0, proprietária, etc.)

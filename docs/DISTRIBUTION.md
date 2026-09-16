@@ -155,15 +155,34 @@ loader (`@deepseek-ai/cordis-plugin-include`), e só existem duas formas:
 > `patch: entry ... not found` — a instalação parece bem-sucedida e não
 > registra nada.
 
-Este kit insere **uma** linha: o bridge de hooks.
+Este kit insere **duas** linhas: o plugin dos comandos e o bridge de hooks.
 
 ```yaml
 - insert:
-    - id: sveltekit-cloudflare-hooks
+    - id: sveflare-commands
+      name: './lib/commands.mjs'
+      config:
+        commands:
+          - name: sveflare-spec
+            file: .agents/commands/sveflare-spec.md
+          # ... plan, goal, verify, ship
+
+    - id: sveflare-hooks
       name: '@deepseek-ai/dsh-hooks-claude-code'
       config:
         configPath: './.agents/hooks.json'
 ```
+
+Repare no `name: './lib/commands.mjs'`: o loader resolve nomes começando
+com `./` **relativo ao próprio arquivo de patch**, então o módulo viaja
+junto com o bundle.
+
+**Os comandos precisam de um plugin.** O `@deepseek-ai/dsh-commands` é um
+registry em que cada plugin se registra **por código**
+(`ctx.commands.register(definition)`). Ele não tem schema de configuração e
+**nada no DSH varre `.agents/commands/`** — por isso este bundle traz
+`lib/commands.mjs`, que lê os prompts em `.agents/commands/*.md` e os
+registra como comandos reais.
 
 **Skills não precisam de linha.** O `dsh-base` já monta
 `@deepseek-ai/dsh-skill-filesystem` com `includeDefaultRoots: true`, que

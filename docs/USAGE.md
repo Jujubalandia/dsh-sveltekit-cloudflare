@@ -52,7 +52,11 @@ Liste as skills disponíveis no seu catálogo.
 
 Se ele não listar nada, verifique:
 - O `cordis.patch.yml` está no bundle?
-- O `dsh-skills-bridge` está instalado no profile?
+- Os `SKILL.md` em `.agents/skills/` têm frontmatter YAML com `name` e
+  `description`? O provider `@deepseek-ai/dsh-skill-filesystem`, que o
+  `dsh-base` já monta com `includeDefaultRoots: true`, varre
+  `.agents/skills` sozinho — mas ignora em silêncio o arquivo sem esse
+  cabeçalho.
 - Você reiniciou o DSH após `dsh plugin add`?
 
 ### 1.2 — Verificar que os comandos estão disponíveis
@@ -69,7 +73,8 @@ Digite `/sveflare` no prompt e pressione Tab (ou abra o autocomplete).
 /sveflare-ship
 ```
 
-Se não aparecerem, verifique se a seção `commandDirs` está no
+Se não aparecerem, verifique se a linha `- insert:` de id
+`sveflare-commands` (plugin `./lib/commands.mjs`) está no
 `cordis.patch.yml` (ver seção 3 deste documento).
 
 ### 1.3 — Confirmar que o harness está lendo o AGENTS.md
@@ -253,6 +258,80 @@ mudar, abra um novo goal.
 
 **Nota:** `/sveflare-ship` nunca faz deploy em produção sem sua
 autorização explícita.
+
+### 3.6 — Como os comandos são registrados
+
+Os comandos `/sveflare-*` são definidos em `.agents/commands/` e
+registrados no bundle via `cordis.patch.yml`. O DSH **não varre** esse
+diretório: o `@deepseek-ai/dsh-commands` é um registry em que cada plugin
+se registra por **código**, e ele não tem schema de configuração. Quem faz
+a ponte entre os arquivos markdown e o registry é o `lib/commands.mjs`,
+que este bundle publica. Quando o usuário roda
+`dsh plugin --profile web add`, o DSH:
+
+1. Lê o `cordis.patch.yml` do bundle.
+2. Aplica a linha `- insert:` de id `sveflare-commands`.
+3. Carrega o plugin `./lib/commands.mjs` (caminho resolvido pelo loader
+   relativo ao próprio `cordis.patch.yml`).
+4. O plugin lê cada arquivo declarado em `config.commands[].file` e
+   registra o comando via `ctx.commands.register()` — o `name` da config
+   é o que vira `/sveflare-spec`, `/sveflare-plan`, etc.
+5. Na próxima sessão, os comandos aparecem no autocomplete.
+
+Se os comandos não aparecerem, verifique:
+
+```bash
+# 1. Os arquivos existem?
+ls .agents/commands/
+
+# 2. O cordis.patch.yml tem a seção sveflare-commands?
+grep -A 20 "sveflare-commands" cordis.patch.yml
+
+# 3. O bundle foi reinstalado?
+dsh plugin --profile web remove @seu-usuario/dsh-sveltekit-cloudflare
+dsh plugin --profile web add @seu-usuario/dsh-sveltekit-cloudflare
+dsh web
+```
+
+**Estrutura do arquivo de comando:**
+
+Cada comando é um arquivo markdown em `.agents/commands/` com um
+frontmatter YAML no topo:
+
+```markdown
+---
+name: sveflare-spec
+description: Inicia especificação estruturada (SPEC.md)
+argument-hint: <descrição da feature em 1-3 frases>
+allowed-tools: read, write, edit, grep, bash
+model: deepseek-chat
+---
+
+# /sveflare-spec — Especificação estruturada de feature
+
+<corpo do prompt...>
+```
+
+### 3.7 — Verificar que os comandos carregaram
+
+```bash
+
+# 1. Os arquivos existem?
+ls .agents/commands/
+# Esperado: sveflare-spec.md, sveflare-plan.md, sveflare-goal.md,
+#           sveflare-verify.md, sveflare-ship.md
+
+# 2. O cordis.patch.yml tem a linha sveflare-commands?
+grep -A 12 "sveflare-commands" cordis.patch.yml
+# Esperado: id: sveflare-commands, name: './lib/commands.mjs'
+#           e config.commands com os 5 arquivos .agents/commands/*.md
+
+# 3. Reinstalar o bundle
+dsh plugin --profile web remove @seu-usuario/dsh-sveltekit-cloudflare
+dsh plugin --profile web add @seu-usuario/dsh-sveltekit-cloudflare
+dsh web
+```
+
 
 ---
 
@@ -534,8 +613,11 @@ evidências (comandos + saída), e decida. O Judge pode ajudar.
 
 ### "Posso adicionar meus próprios comandos?"
 
-Sim. Crie um arquivo em `.agents/commands/` seguindo o padrão dos
-existentes. Depois, registre em `cordis.patch.yml` (`commandDirs`).
+Sim. Crie o markdown em `.agents/commands/` seguindo o padrão dos
+existentes e acrescente um par `name`/`file` em `config.commands`, na
+linha `sveflare-commands` do `cordis.patch.yml`. O plugin
+`lib/commands.mjs` lê os arquivos declarados e registra cada um — nada é
+descoberto do disco.
 
 ### "O harness funciona em monorepos?"
 
@@ -554,37 +636,71 @@ dsh web
 
 ## 10. Troubleshooting
 
-### Comandos `/sveflare-*` não aparecem no autocomplete
+Antes de tudo, rode o validador do próprio kit — ele checa os contratos
+que o DSH exige e que falham em silêncio (linha de plugin fora do
+`insert:`, skill sem frontmatter, script com sintaxe quebrada):
 
-**Causa:** o `cordis.patch.yml` não registra `commandDirs`.
-
-**Solução:** adicione a seção ao `cordis.patch.yml`:
-
-```yaml
-- id: sveltekit-cloudflare-commands
-  name: "@deepseek-ai/dsh-commands"
-  config:
-    commandDirs:
-      - ".agents/commands"
+```bash
+node scripts/validate-kit.mjs
 ```
 
-Depois reinicie o DSH.
+E, para ver o que o DSH realmente carregou do bundle:
+
+```bash
+dsh --profile web --dump-config | grep sveflare
+```
+
+### Comandos `/sveflare-*` não aparecem no autocomplete
+
+**Causas possíveis:**
+- A linha `- insert:` de id `sveflare-commands` não está no
+  `cordis.patch.yml`. Um `id` + `name` de topo, fora do `insert:` **não
+  adiciona plugin nenhum** — é só uma asserção sobre uma linha que já
+  existe, e apontando para um id inexistente vira no-op silencioso com o
+  warning `patch: entry ... not found`.
+- Um `config.commands[].file` aponta para um arquivo que não existe — o
+  plugin loga `<arquivo> não encontrado` e pula só aquele comando.
+- A camada do bundle não está instalada no profile.
+
+**Solução:** confirme que a linha existe e que ela está **dentro** do
+`insert:`:
+
+```yaml
+- insert:
+    - id: sveflare-commands
+      name: './lib/commands.mjs'
+      config:
+        commands:
+          - name: sveflare-spec
+            file: .agents/commands/sveflare-spec.md
+```
+
+Depois rode `node scripts/validate-kit.mjs` e
+`dsh --profile web --dump-config | grep sveflare` para confirmar que a
+linha entrou, e reinicie o DSH.
 
 ### Skills não aparecem no catálogo
 
-**Causas possíveis:**
-- `dsh-skills-bridge` não instalado.
-- `skillDirs` errado no `cordis.patch.yml`.
-- Bundle não reiniciado.
+**Causa mais comum:** o `SKILL.md` não tem frontmatter YAML com `name` e
+`description` no topo. O `@deepseek-ai/dsh-skill-filesystem` — que o
+`dsh-base` já monta com `includeDefaultRoots: true` — varre
+`<projectRoot>/.agents/skills` e `<projectRoot>/.dsh/skills` sozinho, sem
+nenhuma linha no bundle, mas **ignora com um warning** o arquivo sem esse
+cabeçalho. O `name` também precisa casar com
+`/^[a-z0-9]+(?:-[a-z0-9]+)*$/`.
+
+**Outras causas:**
+- O arquivo não está em `.agents/skills/<nome>/SKILL.md`.
+- O bundle não foi reiniciado, ou o DSH foi iniciado fora do workspace.
 
 **Solução:**
 
 ```bash
-# Verificar instalação do bridge
-dsh plugin --profile web list | grep skills-bridge
+# O frontmatter está no topo de cada SKILL.md?
+head -5 .agents/skills/*/SKILL.md
 
-# Reinstalar se necessário
-dsh plugin --profile web add dsh-skills-bridge
+# Checagem completa (frontmatter, nomes válidos, patch, hooks, scripts)
+node scripts/validate-kit.mjs
 
 # Reiniciar
 dsh web
@@ -620,12 +736,14 @@ chmod +x scripts/*.sh
 
 ### "O agente não sabe usar o comando /sveflare-spec"
 
-**Causa:** o arquivo `.agents/commands/sveflare-spec.md` não existe ou
-está fora do formato esperado.
+**Causa:** o arquivo `.agents/commands/sveflare-spec.md` não existe, ou o
+caminho declarado em `config.commands[].file` não bate com o arquivo no
+disco (o plugin loga um warning e não registra o comando).
 
-**Solução:** verifique que o arquivo existe, é markdown válido, e tem
-o cabeçalho de comando (`---` frontmatter com `name`, `description`,
-`prompt`).
+**Solução:** confirme que o caminho em `cordis.patch.yml` existe
+(`ls .agents/commands/`), que o arquivo tem frontmatter `---` com `name`
+e `description` no topo, e que o corpo do prompt depois do frontmatter
+não está vazio — é o corpo que o comando envia ao modelo.
 
 ---
 

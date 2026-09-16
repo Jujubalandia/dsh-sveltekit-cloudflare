@@ -44,39 +44,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # Este pacote é um bundle de harness: não tem src/ nem lockfile
+      # nem etapa de build. O que precisa passar é a integridade do
+      # próprio bundle.
+      - name: Instalar dependência de validação
+        run: npm install --no-save --ignore-scripts yaml
 
-      - name: Type check
-        run: pnpm check
+      - name: Validar integridade do kit
+        run: node scripts/validate-kit.mjs
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Testes
-        run: pnpm test:coverage
-
-      - name: Build
-        run: pnpm build
-        env:
-          NODE_ENV: production
-
-      - name: Empacotar artefatos do build
+      - name: Empacotar o bundle
         run: |
           mkdir -p release-artifacts
-          if [ -d ".svelte-kit/cloudflare" ]; then
-            tar -czf release-artifacts/cloudflare-build.tar.gz -C .svelte-kit cloudflare
-          fi
+          npm pack --pack-destination release-artifacts
           cp CHANGELOG.md release-artifacts/ 2>/dev/null || true
-          cp AGENT.md release-artifacts/ 2>/dev/null || true
+          cp AGENTS.md release-artifacts/ 2>/dev/null || true
+          ls -la release-artifacts/
 
       - name: Upload artefatos
         uses: actions/upload-artifact@v4
@@ -122,6 +109,10 @@ jobs:
         id: extract
         run: |
           VERSION="${{ steps.version.outputs.value }}"
+          # O CHANGELOG usa headings SEM o prefixo 'v' (## [1.0.0] - data),
+          # enquanto a tag é v1.0.0. Sem tirar o 'v' a extração nunca casa
+          # e a release cai sempre no fallback.
+          CHANGELOG_VERSION="${VERSION#v}"
           OUT="release_notes.md"
 
           if [ ! -f CHANGELOG.md ]; then
@@ -132,9 +123,9 @@ jobs:
             exit 0
           fi
 
-          # Extrai a seção da versão: começa em "## [vX.Y.Z]" e termina
+          # Extrai a seção da versão: começa em "## [X.Y.Z]" e termina
           # na próxima linha "## [" de nível igual
-          awk -v ver="$VERSION" '
+          awk -v ver="$CHANGELOG_VERSION" '
             BEGIN { hdr = "## [" ver "]" ; started = 0 }
             index($0, hdr) == 1 { started = 1; print; next }
             started && index($0, "## [") == 1 { exit }
@@ -192,9 +183,9 @@ jobs:
           prerelease: ${{ needs.changelog.outputs.is_prerelease == 'true' }}
           fail_on_unmatched_files: false
           files: |
-            release-artifacts/cloudflare-build.tar.gz
+            release-artifacts/*.tgz
             release-artifacts/CHANGELOG.md
-            release-artifacts/AGENT.md
+            release-artifacts/AGENTS.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

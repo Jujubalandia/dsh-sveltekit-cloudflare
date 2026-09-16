@@ -90,11 +90,25 @@ else
   echo "     para ./cordis.patch.yml."
 fi
 
-# A linha de hooks precisa estar na árvore composta.
-if printf '%s' "$DUMP" | grep -q "sveltekit-cloudflare-hooks"; then
-  ok "a linha sveltekit-cloudflare-hooks foi inserida"
+# As duas linhas inseridas pelo bundle precisam estar na árvore.
+if printf '%s' "$DUMP" | grep -q "sveflare-commands"; then
+  ok "a linha sveflare-commands foi inserida"
 else
-  bad "a linha de hooks NÃO foi inserida"
+  bad "a linha sveflare-commands NÃO foi inserida"
+fi
+
+if printf '%s' "$DUMP" | grep -q "sveflare-hooks"; then
+  ok "a linha sveflare-hooks foi inserida"
+else
+  bad "a linha sveflare-hooks NÃO foi inserida"
+fi
+
+# O plugin dos comandos é um módulo DESTE bundle: se o caminho não
+# resolver, os /sveflare-* não existem.
+if printf '%s' "$DUMP" | grep -q "lib/commands.mjs"; then
+  ok "o plugin lib/commands.mjs está montado"
+else
+  bad "lib/commands.mjs ausente do dump — verifique o campo 'files' do package.json"
 fi
 
 # O nome do plugin de hooks precisa aparecer.
@@ -177,9 +191,12 @@ if [ "$FAIL" -gt 0 ]; then
   echo "  · linha não inserida  → faltou 'insert:' no cordis.patch.yml"
   echo "  · 'entry not found'   → patch de topo apontando p/ id inexistente"
   echo "  · skills não carregam → frontmatter name+description no SKILL.md"
+  echo "  · /sveflare-* ausentes→ linha sveflare-commands, ou 'lib/' fora do files"
+  echo ""
+  echo "Antes de tudo, rode:  node scripts/validate-kit.mjs"
   exit 1
 fi
 
 echo ""
-echo "✅ Instalação validada."
+echo "✅ Instalação validada. Os cinco /sveflare-* devem aparecer na sessão."
 exit 0

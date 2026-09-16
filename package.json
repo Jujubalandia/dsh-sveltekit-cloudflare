@@ -29,6 +29,7 @@
     "AGENTS.md",
     "cordis.patch.yml",
     ".agents/",
+    "lib/",
     "scripts/",
     "docs/",
     "harness.config.yml"
@@ -57,7 +58,7 @@
     "d1:migrate:prod": "wrangler d1 migrations apply DB --env production",
     "deploy:staging": "wrangler deploy --env staging -c wrangler.staging.toml",
     "deploy:prod": "wrangler deploy --env production -c wrangler.production.toml",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "zod": "^3.23.8"
