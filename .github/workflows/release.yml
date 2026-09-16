@@ -51,8 +51,16 @@ jobs:
       # Este pacote é um bundle de harness: não tem src/ nem lockfile
       # nem etapa de build. O que precisa passar é a integridade do
       # próprio bundle.
-      - name: Instalar dependência de validação
-        run: npm install --no-save --ignore-scripts yaml
+      # Mesma razão do ci.yml: instalar no root do projeto dispara a
+      # resolução das devDependencies e falha com ERESOLVE.
+      - name: Instalar dependência de validação (isolada do projeto)
+        run: |
+          mkdir -p "$RUNNER_TEMP/kitdeps"
+          (cd "$RUNNER_TEMP/kitdeps" \
+            && npm init -y >/dev/null \
+            && npm install --no-save --ignore-scripts yaml)
+          mkdir -p node_modules
+          ln -sfn "$RUNNER_TEMP/kitdeps/node_modules/yaml" node_modules/yaml
 
       - name: Validar integridade do kit
         run: node scripts/validate-kit.mjs

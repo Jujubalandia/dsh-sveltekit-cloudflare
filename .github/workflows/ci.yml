@@ -50,9 +50,21 @@ jobs:
       # O validador usa `yaml` quando disponível para checar o
       # cordis.patch.yml de verdade; sem ele degrada para uma
       # checagem estrutural. Instalamos para ter a validação completa.
-      # --ignore-scripts evita rodar o `prepare` do próprio pacote.
-      - name: Instalar dependência de validação
-        run: npm install --no-save --ignore-scripts yaml
+      #
+      # Instalamos num diretório PRÓPRIO, não no root do projeto:
+      # `npm install` no root resolve também as devDependencies
+      # (SvelteKit + adapter-cloudflare), que hoje conflitam com
+      # ERESOLVE — um problema que não tem nada a ver com validar o kit.
+      # O symlink é o que a resolução ESM do Node enxerga.
+      - name: Instalar dependência de validação (isolada do projeto)
+        run: |
+          mkdir -p "$RUNNER_TEMP/kitdeps"
+          (cd "$RUNNER_TEMP/kitdeps" \
+            && npm init -y >/dev/null \
+            && npm install --no-save --ignore-scripts yaml)
+          mkdir -p node_modules
+          ln -sfn "$RUNNER_TEMP/kitdeps/node_modules/yaml" node_modules/yaml
+          node -e "import('yaml').then(() => console.log('yaml resolvível a partir do repo')).catch(error => { console.error(error); process.exit(1) })"
 
       - name: Validar integridade do kit
         run: node scripts/validate-kit.mjs
@@ -96,10 +108,10 @@ jobs:
 
       - name: Escanear o histórico
         run: |
-          # `git` é o subcomando atual; `detect` é o antigo. Usamos o
-          # que existir na versão instalada.
+          # `gitleaks git` (subcomando atual) recebe o repositório como
+          # argumento POSICIONAL; `--source` só existe no antigo `detect`.
           if gitleaks git --help >/dev/null 2>&1; then
-            gitleaks git --source . --config .gitleaks.toml --redact --verbose
+            gitleaks git . --config .gitleaks.toml --redact --verbose
           else
             gitleaks detect --source . --config .gitleaks.toml --redact --verbose
           fi
