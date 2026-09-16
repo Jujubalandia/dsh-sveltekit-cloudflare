@@ -1,0 +1,70 @@
+# ==============================================================
+# DSH Bundle Patch — SvelteKit + Cloudflare Harness
+#
+# Este arquivo é a camada de configuração que o DSH aplica quando
+# o bundle entra em `dsh.profile.bundles`.
+#
+# Dialeto: array YAML de entradas de patch do loader
+# (`@deepseek-ai/cordis-plugin-include`). Só existem duas formas:
+#
+#   - insert: [ {id, name, config} ]   → ADICIONA linhas novas
+#   - id: <row-existente> + config     → SOBRESCREVE a config da linha
+#   - id: <row-existente> + name       → ASSERE o nome da linha alvo
+#
+# Atenção: `name` numa entrada de topo (sem `insert`) NÃO adiciona
+# plugin nenhum — é uma asserção de que a linha alvo já tem aquele
+# nome. Plugin novo só entra dentro de `insert:`.
+#
+# Referência: docs/user/develop/basic/publish.md
+# ==============================================================
+
+# ------------------------------------------------------------------
+# 1. Skills — nenhuma linha é necessária
+# ------------------------------------------------------------------
+# O `dsh-base` já monta `@deepseek-ai/dsh-skill-filesystem` (id:
+# `skill-filesystem`) com `includeDefaultRoots: true`, que descobre
+# automaticamente `<projectRoot>/.agents/skills` e
+# `<projectRoot>/.dsh/skills` (ranks PROJECT_AGENTS_RANK e
+# PROJECT_DSH_RANK).
+#
+# Como este kit É o próprio projeto SvelteKit, as 12 skills em
+# `.agents/skills/` são registradas pelo provider padrão do DSH —
+# não é preciso inserir nem sobrescrever linha alguma aqui.
+#
+# O que cada skill exige é frontmatter YAML com `name` e
+# `description` no topo do SKILL.md. Sem o frontmatter o arquivo é
+# ignorado com um warning, e `name` precisa casar com
+# /^[a-z0-9]+(?:-[a-z0-9]+)*$/.
+
+# ------------------------------------------------------------------
+# 2. Subagentes — nenhuma linha é necessária
+# ------------------------------------------------------------------
+# O `dsh-base` já monta o seam `@deepseek-ai/dsh-subagent` (id:
+# `subagent`) junto de `subagent-spawn-in-process`,
+# `subagent-fork-in-process`, `tool-subagent` e `tool-subagent-fork`.
+#
+# Esse pacote NÃO expõe configuração `agents`: ele é o Service
+# Definition do seam (`ctx.subagents`), não um registro de papéis.
+# Papéis nomeados no DSH são Agent Presets — um diretório com
+# `agent.cordis.yml` descoberto pelos preset roots — e não linhas
+# de bundle.
+
+# ------------------------------------------------------------------
+# 3. Hooks — bridge de hooks do harness
+# ------------------------------------------------------------------
+# `@deepseek-ai/dsh-hooks-claude-code` registra hooks de comando nos
+# extension points de interceptação do harness. Ele lê um JSON no
+# formato do Claude Code cujo caminho vem de `configPath`
+# (obrigatório, lido uma única vez no load e resolvido contra o cwd
+# do processo DSH).
+#
+# Eventos suportados pelo bridge: SessionStart, UserPromptSubmit,
+# PreToolUse, PostToolUse, Stop, SubagentStart, SubagentStop.
+#
+# PreCommit e PrePR NÃO são eventos do bridge — eles vivem nos hooks
+# de git em `.husky/pre-commit` e `.husky/pre-push`.
+- insert:
+    - id: sveltekit-cloudflare-hooks
+      name: '@deepseek-ai/dsh-hooks-claude-code'
+      config:
+        configPath: './.agents/hooks.json'

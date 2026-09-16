@@ -1,0 +1,205 @@
+name: Release
+
+# ------------------------------------------------------------------
+# Dispara ao empurrar tag SemVer (v1.2.3) ou manualmente via UI.
+# Fluxo: build → test → extrair seção do CHANGELOG → criar GitHub Release
+# ------------------------------------------------------------------
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag a publicar (ex: v1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Marcar como pré-release'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ================================================================
+  # Job 1 — Validação e build
+  # ================================================================
+  build:
+    name: Build & verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Testes
+        run: pnpm test:coverage
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Empacotar artefatos do build
+        run: |
+          mkdir -p release-artifacts
+          if [ -d ".svelte-kit/cloudflare" ]; then
+            tar -czf release-artifacts/cloudflare-build.tar.gz -C .svelte-kit cloudflare
+          fi
+          cp CHANGELOG.md release-artifacts/ 2>/dev/null || true
+          cp AGENT.md release-artifacts/ 2>/dev/null || true
+
+      - name: Upload artefatos
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts/
+          retention-days: 30
+
+  # ================================================================
+  # Job 2 — Extrair notas do CHANGELOG
+  # ================================================================
+  changelog:
+    name: Extract changelog
+    runs-on: ubuntu-latest
+    needs: [build]
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      notes_path: ${{ steps.extract.outputs.path }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determinar versão
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$VERSION" == *-rc.* ]] || [[ "${{ github.event.inputs.prerelease }}" == "true" ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extrair seção do CHANGELOG
+        id: extract
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          OUT="release_notes.md"
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "## $VERSION" > "$OUT"
+            echo "" >> "$OUT"
+            echo "Release $VERSION" >> "$OUT"
+            echo "path=$OUT" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extrai a seção da versão: começa em "## [vX.Y.Z]" e termina
+          # na próxima linha "## [" de nível igual
+          awk -v ver="$VERSION" '
+            BEGIN { hdr = "## [" ver "]" ; started = 0 }
+            index($0, hdr) == 1 { started = 1; print; next }
+            started && index($0, "## [") == 1 { exit }
+            started { print }
+          ' CHANGELOG.md > "$OUT"
+
+          # Fallback se a seção não existir
+          if [ ! -s "$OUT" ]; then
+            echo "## $VERSION" > "$OUT"
+            echo "" >> "$OUT"
+            echo "Release $VERSION — sem entrada dedicada no CHANGELOG." >> "$OUT"
+          fi
+
+          echo "---- release notes ----"
+          cat "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release_notes.md
+          retention-days: 7
+
+  # ================================================================
+  # Job 3 — Criar release no GitHub
+  # ================================================================
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build, changelog]
+    if: ${{ needs.changelog.outputs.version != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar artefatos
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts/
+
+      - name: Baixar notas
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes/
+
+      - name: Criar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.changelog.outputs.version }}
+          name: ${{ needs.changelog.outputs.version }}
+          body_path: release-notes/release_notes.md
+          draft: false
+          prerelease: ${{ needs.changelog.outputs.is_prerelease == 'true' }}
+          fail_on_unmatched_files: false
+          files: |
+            release-artifacts/cloudflare-build.tar.gz
+            release-artifacts/CHANGELOG.md
+            release-artifacts/AGENT.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resumo
+        run: |
+          echo "### ✅ Release ${{ needs.changelog.outputs.version }} publicada" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Prerelease: ${{ needs.changelog.outputs.is_prerelease }}" >> "$GITHUB_STEP_SUMMARY"

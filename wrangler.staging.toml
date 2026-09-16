@@ -1,0 +1,67 @@
+# Cloudflare Workers / Pages — configuração staging
+# Deploy: wrangler deploy --env staging -c wrangler.staging.toml
+# Secrets: wrangler secret put <NOME> --env staging
+
+name = "myapp-staging"
+main = "workers/src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# ------------------------------------------------------------------
+# D1 — banco SQL (staging)
+# ------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "myapp-db-staging"
+database_id = "REPLACE_STAGING_D1_ID"
+
+# ------------------------------------------------------------------
+# KV — cache / config (staging)
+# ------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_STAGING_KV_ID"
+preview_id = "REPLACE_STAGING_KV_PREVIEW_ID"
+
+# ------------------------------------------------------------------
+# R2 — objetos (staging)
+# ------------------------------------------------------------------
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "myapp-storage-staging"
+
+# ------------------------------------------------------------------
+# Workers AI — binding nativo
+# ------------------------------------------------------------------
+[ai]
+binding = "AI"
+
+# ------------------------------------------------------------------
+# Variáveis não sensíveis
+# ------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "staging"
+AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/ACCOUNT/GATEWAY/openai"
+LOG_LEVEL = "info"
+
+# ------------------------------------------------------------------
+# Observabilidade
+# ------------------------------------------------------------------
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# ------------------------------------------------------------------
+# Rotas (opcional)
+# ------------------------------------------------------------------
+# routes = [
+#   { pattern = "staging.myapp.com/*", zone_name = "myapp.com" }
+# ]
+
+# ------------------------------------------------------------------
+# Secrets obrigatórios em staging
+# ------------------------------------------------------------------
+# wrangler secret put SESSION_SECRET --env staging
+# wrangler secret put OPENAI_API_KEY --env staging
+# wrangler secret list --env staging

@@ -1,0 +1,89 @@
+{
+  "name": "@jujubalandia/dsh-sveltekit-cloudflare",
+  "version": "1.0.0",
+  "description": "DSH harness for SvelteKit + Cloudflare (Pages, Workers, D1, KV, R2, AI Gateway)",
+  "license": "MIT",
+  "repository": "github:Jujubalandia/dsh-sveltekit-cloudflare",
+  "keywords": [
+    "dsh",
+    "dsh-bundle",
+    "sveltekit",
+    "cloudflare",
+    "harness",
+    "agent",
+    "skills"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+
+  "files": [
+    "AGENTS.md",
+    "cordis.patch.yml",
+    ".agents/",
+    "scripts/",
+    "docs/",
+    "harness.config.yml"
+  ],
+
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:mutation": "stryker run",
+    "verify": "./scripts/verify.sh",
+    "security:scan": "./scripts/security-scan.sh",
+    "owasp:check": "./scripts/owasp-check.sh",
+    "complexity:scan": "./scripts/complexity-check.sh",
+    "smoke": "./scripts/smoke-test.sh",
+    "git:flow": "./scripts/git-flow.sh",
+    "d1:migrate:local": "wrangler d1 migrations apply DB --local",
+    "d1:migrate:staging": "wrangler d1 migrations apply DB --env staging",
+    "d1:migrate:prod": "wrangler d1 migrations apply DB --env production",
+    "deploy:staging": "wrangler deploy --env staging -c wrangler.staging.toml",
+    "deploy:prod": "wrangler deploy --env production -c wrangler.production.toml",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2",
+    "@stryker-mutator/core": "^8.6.0",
+    "@stryker-mutator/vitest-runner": "^8.6.0",
+    "@sveltejs/adapter-cloudflare": "^4.7.2",
+    "@sveltejs/kit": "^2.8.1",
+    "@sveltejs/vite-plugin-svelte": "^5.0.1",
+    "@types/node": "^22.9.0",
+    "@vitest/coverage-v8": "^2.1.5",
+    "eslint": "^9.15.0",
+    "eslint-plugin-security": "^3.0.1",
+    "husky": "^9.1.7",
+    "jscpd": "^4.0.5",
+    "knip": "^5.40.0",
+    "prettier": "^3.4.0",
+    "prettier-plugin-svelte": "^3.3.2",
+    "svelte": "^5.2.0",
+    "svelte-check": "^4.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.5",
+    "wrangler": "^3.90.0"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

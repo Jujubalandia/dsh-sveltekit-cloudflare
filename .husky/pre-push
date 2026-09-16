@@ -1,0 +1,67 @@
+#!/usr/bin/env sh
+# ==============================================================
+# Hook de pre-push — Husky v9
+#
+# Implementa o gate de "PrePR" descrito em AGENTS.md e em
+# cordis.patch.yml: o DSH não tem evento PrePR no bridge de hooks,
+# então este gate vive no git, onde o push realmente acontece.
+#
+# Roda: verify + security scan + OWASP Top 10 + complexidade
+#
+# Pulando conscientemente (caso de emergência):
+#   git push --no-verify
+# ==============================================================
+
+. "$(dirname -- "$0")/_/husky.sh" 2>/dev/null || true
+
+set -e
+
+FAILED=0
+
+echo ""
+echo "┌────────────────────────────────────────────────────────┐"
+echo "│ DSH pre-push — verify + security + OWASP + complexity  │"
+echo "└────────────────────────────────────────────────────────┘"
+
+# --------------------------------------------------------------
+# Helper: roda um script do kit, tolerando ausência de ferramenta
+# --------------------------------------------------------------
+run_gate() {
+  STEP="$1"
+  SCRIPT="$2"
+  DESC="$3"
+
+  echo ""
+  echo "▶ [$STEP] $DESC ($SCRIPT)"
+
+  if [ ! -f "$SCRIPT" ]; then
+    echo "  ⚠️  $SCRIPT não encontrado — gate pulado."
+    return 0
+  fi
+
+  if ! sh "$SCRIPT"; then
+    echo "  ❌ $SCRIPT falhou."
+    FAILED=1
+  fi
+}
+
+# --------------------------------------------------------------
+# Gates — a ordem vai do mais rápido ao mais caro
+# --------------------------------------------------------------
+run_gate "1/4" "./scripts/verify.sh"          "Pipeline completo (lint, check, testes)"
+run_gate "2/4" "./scripts/security-scan.sh"   "Gitleaks + audit + secrets"
+run_gate "3/4" "./scripts/owasp-check.sh"     "OWASP Top 10"
+run_gate "4/4" "./scripts/complexity-check.sh" "Complexidade, duplicação e dead code"
+
+# --------------------------------------------------------------
+# Resultado
+# --------------------------------------------------------------
+echo ""
+if [ "$FAILED" -eq 1 ]; then
+  echo "❌ pre-push FALHOU — corrija os gates acima antes de abrir o PR."
+  echo "   O CI vai repetir estas verificações."
+  exit 1
+fi
+
+echo "✅ pre-push OK — pode abrir o PR."
+echo ""

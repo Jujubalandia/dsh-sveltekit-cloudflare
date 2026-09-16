@@ -1,0 +1,44 @@
+{
+  "extends": "./.svelte-kit/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowJs": true,
+    "checkJs": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "workers/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "*.config.ts",
+    "*.config.js",
+    ".svelte-kit/ambient.d.ts",
+    ".svelte-kit/types/**/$types.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".svelte-kit/output",
+    "build",
+    "dist",
+    "coverage",
+    ".wrangler"
+  ]
+}

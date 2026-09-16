@@ -1,0 +1,125 @@
+# Gitleaks — detecção de secrets em código
+# Uso: gitleaks detect --source . --redact --config .gitleaks.toml
+#      gitleaks protect --staged --redact --config .gitleaks.toml
+
+title = "DSH — SvelteKit + Cloudflare gitleaks config"
+
+[extend]
+# Herda as regras padrão do gitleaks (~150 detectores)
+useDefault = true
+
+# ------------------------------------------------------------------
+# Regras específicas do stack Cloudflare / AI Gateway
+# ------------------------------------------------------------------
+
+[[rules]]
+id = "cloudflare-api-token"
+description = "Cloudflare API Token"
+regex = '''(?i)(cloudflare|cf)[_\-\s]?(api[_\-\s]?)?(token|key)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{40}['"]?'''
+tags = ["cloudflare", "key", "secret"]
+
+[[rules]]
+id = "cloudflare-global-api-key"
+description = "Cloudflare Global API Key"
+regex = '''(?i)cloudflare[_\-\s]?(global[_\-\s]?)?api[_\-\s]?key\s*[:=]\s*['"]?[0-9a-f]{37}['"]?'''
+tags = ["cloudflare", "key", "secret"]
+
+[[rules]]
+id = "cloudflare-account-id"
+description = "Cloudflare Account ID hardcoded"
+regex = '''(?i)account[_\-\s]?id\s*[:=]\s*['"]?[0-9a-f]{32}['"]?'''
+tags = ["cloudflare"]
+
+[[rules]]
+id = "d1-database-id"
+description = "D1 database_id hardcoded em código"
+regex = '''database_id\s*=\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'''
+tags = ["cloudflare", "d1"]
+
+[[rules]]
+id = "kv-namespace-id"
+description = "KV namespace id hardcoded"
+regex = '''(?i)kv[_\-\s]?namespace[_\-\s]?id\s*[:=]\s*['"]?[0-9a-f]{32}['"]?'''
+tags = ["cloudflare", "kv"]
+
+[[rules]]
+id = "r2-access-key"
+description = "R2 access key"
+regex = '''(?i)r2[_\-\s]?(access[_\-\s]?)?key\s*[:=]\s*['"]?[A-Za-z0-9]{32}['"]?'''
+tags = ["cloudflare", "r2", "key", "secret"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API key"
+regex = '''sk-[A-Za-z0-9]{20,}'''
+tags = ["openai", "key", "secret"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[A-Za-z0-9_\-]{20,}'''
+tags = ["anthropic", "key", "secret"]
+
+[[rules]]
+id = "ai-gateway-token"
+description = "AI Gateway authentication token"
+regex = '''(?i)(ai[_\-\s]?gateway|cf[_\-\s]?aig)[_\-\s]?(token|key)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{20,}['"]?'''
+tags = ["cloudflare", "ai-gateway", "secret"]
+
+[[rules]]
+id = "session-secret-hardcoded"
+description = "SESSION_SECRET com valor literal"
+regex = '''(?i)session[_\-\s]?secret\s*[:=]\s*['"][^'"]{16,}['"]'''
+tags = ["secret", "session"]
+
+[[rules]]
+id = "jwt-secret"
+description = "JWT secret com valor literal"
+regex = '''(?i)jwt[_\-\s]?secret\s*[:=]\s*['"][^'"]{16,}['"]'''
+tags = ["secret", "jwt"]
+
+[[rules]]
+id = "private-key-block"
+description = "Chave privada (PEM)"
+regex = '''-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----'''
+tags = ["key", "secret"]
+
+# ------------------------------------------------------------------
+# Allowlist — reduzir falsos positivos
+# ------------------------------------------------------------------
+[allowlist]
+description = "Falsos positivos conhecidos"
+paths = [
+  '''wrangler\.toml$''',
+  '''wrangler\..*\.toml$''',
+  '''\.dev\.vars\.example$''',
+  '''\.env\.example$''',
+  '''node_modules/.*''',
+  '''\.svelte-kit/.*''',
+  '''build/.*''',
+  '''dist/.*''',
+  '''coverage/.*''',
+  '''playwright-report/.*''',
+  '''test-results/.*''',
+  '''pnpm-lock\.yaml$''',
+  '''\.gitleaks\.toml$'''
+]
+
+regexes = [
+  '''REPLACE_[A-Z_]+''',
+  '''<REPLACE_[A-Z_]+>''',
+  '''example\.com''',
+  '''your-.*-here''',
+  '''xxx+'''
+]
+
+stopwords = [
+  "example",
+  "placeholder",
+  "changeme",
+  "replace-me",
+  "your-key-here",
+  "test-only",
+  "dummy",
+  "fake"
+]

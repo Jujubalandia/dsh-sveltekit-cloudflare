@@ -1,0 +1,64 @@
+#!/usr/bin/env sh
+# ==============================================================
+# Hook de pre-commit — Husky v9
+# Roda: lint + type check + secrets scan nos arquivos staged
+# Instalação: pnpm prepare  (ou `husky` manualmente)
+# ==============================================================
+
+. "$(dirname -- "$0")/_/husky.sh" 2>/dev/null || true
+
+set -e
+
+echo ""
+echo "┌────────────────────────────────────────────────────────┐"
+echo "│ DSH pre-commit — lint + check + secrets scan           │"
+echo "└────────────────────────────────────────────────────────┘"
+
+# --------------------------------------------------------------
+# 1. Lint e formatação
+# --------------------------------------------------------------
+echo ""
+echo "▶ [1/3] Lint (Prettier + ESLint)"
+pnpm lint || {
+  echo "❌ Lint falhou. Corrija antes de commitar."
+  exit 1
+}
+
+# --------------------------------------------------------------
+# 2. Type check
+# --------------------------------------------------------------
+echo ""
+echo "▶ [2/3] Type check (svelte-check)"
+pnpm check || {
+  echo "❌ Type check falhou. Corrija antes de commitar."
+  exit 1
+}
+
+# --------------------------------------------------------------
+# 3. Secrets scan (somente arquivos staged)
+# --------------------------------------------------------------
+echo ""
+echo "▶ [3/3] Secrets scan (gitleaks protect --staged)"
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect \
+    --staged \
+    --redact \
+    --config .gitleaks.toml \
+    --verbose || {
+    echo ""
+    echo "❌ Possível secret detectado nos arquivos staged."
+    echo "   Remova o segredo ou adicione à allowlist do .gitleaks.toml"
+    exit 1
+  }
+else
+  echo "⚠️  gitleaks não encontrado. Instale com:"
+  echo "    brew install gitleaks         (macOS)"
+  echo "    ou baixe de https://github.com/gitleaks/gitleaks/releases"
+  echo ""
+  echo "   O commit prosseguirá, mas o CI irá bloquear se houver secret."
+fi
+
+echo ""
+echo "✅ pre-commit OK — prosseguindo com o commit."
+echo ""

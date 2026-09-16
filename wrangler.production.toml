@@ -1,0 +1,84 @@
+# Cloudflare Workers / Pages — configuração produção
+# Deploy: wrangler deploy --env production -c wrangler.production.toml
+# ATENÇÃO: exige aprovação humana (approval gate) antes do deploy.
+# Secrets: wrangler secret put <NOME> --env production
+
+name = "myapp"
+main = "workers/src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# ------------------------------------------------------------------
+# D1 — banco SQL (produção)
+# ------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "myapp-db-prod"
+database_id = "REPLACE_PROD_D1_ID"
+
+# ------------------------------------------------------------------
+# KV — cache / config (produção)
+# ------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_PROD_KV_ID"
+preview_id = "REPLACE_PROD_KV_PREVIEW_ID"
+
+# ------------------------------------------------------------------
+# R2 — objetos (produção, bucket privado)
+# ------------------------------------------------------------------
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "myapp-storage-prod"
+
+# ------------------------------------------------------------------
+# Workers AI — binding nativo
+# ------------------------------------------------------------------
+[ai]
+binding = "AI"
+
+# ------------------------------------------------------------------
+# Variáveis não sensíveis
+# ------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "production"
+AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/ACCOUNT/GATEWAY/openai"
+LOG_LEVEL = "warn"
+
+# ------------------------------------------------------------------
+# Observabilidade — habilitada com amostragem total
+# ------------------------------------------------------------------
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# ------------------------------------------------------------------
+# Rotas (obrigatório em produção)
+# ------------------------------------------------------------------
+# routes = [
+#   { pattern = "myapp.com/*", zone_name = "myapp.com" },
+#   { pattern = "www.myapp.com/*", zone_name = "myapp.com" }
+# ]
+
+# ------------------------------------------------------------------
+# Limites e proteções
+# ------------------------------------------------------------------
+# [limits]
+# cpu_ms = 50
+
+# [placement]
+# mode = "smart"
+
+# ------------------------------------------------------------------
+# Secrets obrigatórios em produção
+# ------------------------------------------------------------------
+# wrangler secret put SESSION_SECRET --env production
+# wrangler secret put OPENAI_API_KEY --env production
+# wrangler secret list --env production
+#
+# NUNCA comitar valores. NUNCA usar .dev.vars em produção.
+#
+# Rollback:
+#   wrangler rollback --env production
+#   ou redeploy da versão anterior via tag do Git.

@@ -1,0 +1,64 @@
+# Cloudflare Workers / Pages — configuração local (dev)
+# Uso: desenvolvimento local. Não comitar IDs reais.
+# Para staging use wrangler.staging.toml; produção use wrangler.production.toml.
+
+name = "myapp"
+main = "workers/src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# ------------------------------------------------------------------
+# D1 — banco SQL
+# ------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "myapp-db"
+database_id = "REPLACE_LOCAL_D1_ID"
+
+# ------------------------------------------------------------------
+# KV — cache / config
+# ------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_LOCAL_KV_ID"
+preview_id = "REPLACE_LOCAL_KV_PREVIEW_ID"
+
+# ------------------------------------------------------------------
+# R2 — objetos (buckets privados)
+# ------------------------------------------------------------------
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "myapp-storage"
+
+# ------------------------------------------------------------------
+# Workers AI — binding nativo
+# ------------------------------------------------------------------
+[ai]
+binding = "AI"
+
+# ------------------------------------------------------------------
+# Variáveis não sensíveis
+# ------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "development"
+AI_GATEWAY_URL = "https://gateway.ai.cloudflare.com/v1/ACCOUNT/GATEWAY/openai"
+LOG_LEVEL = "debug"
+
+# ------------------------------------------------------------------
+# Observabilidade
+# ------------------------------------------------------------------
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+# ------------------------------------------------------------------
+# Secrets (não definir aqui)
+# ------------------------------------------------------------------
+# Para desenvolvimento local, use .dev.vars:
+#   SESSION_SECRET=...
+#   OPENAI_API_KEY=...
+#
+# Para ambientes remotos:
+#   wrangler secret put SESSION_SECRET --env staging
+#   wrangler secret put OPENAI_API_KEY --env staging

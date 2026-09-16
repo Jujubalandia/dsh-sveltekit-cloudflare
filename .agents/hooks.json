@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "Hooks do DSH no formato do Claude Code, lidos pelo bridge",
+    "@deepseek-ai/dsh-hooks-claude-code via configPath em cordis.patch.yml.",
+    "O caminho e lido uma vez no load e resolvido contra o cwd do processo DSH.",
+    "",
+    "Eventos suportados pelo bridge: SessionStart, UserPromptSubmit,",
+    "PreToolUse, PostToolUse, Stop, SubagentStart, SubagentStop.",
+    "PreCommit e PrePR NAO sao eventos do bridge — eles vivem nos hooks",
+    "de git em .husky/pre-commit e .husky/pre-push.",
+    "",
+    "Cada comando usa scripts/hook-dispatch.mjs, que le o JSON do stdin,",
+    "extrai tool_input.file_path e injeta a saida do check no contexto do",
+    "modelo via hookSpecificOutput.additionalContext."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "edit|write|str_replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hook-dispatch.mjs\" \"$CLAUDE_PROJECT_DIR/scripts/pre-edit-check.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit|write|str_replace",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hook-dispatch.mjs\" \"$CLAUDE_PROJECT_DIR/scripts/post-edit-check.sh\"",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"[DSH] Antes de editar: classifique o arquivo, carregue a skill relevante e prefira um subagente verificador independente para mudancas de risco.\"}}'",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

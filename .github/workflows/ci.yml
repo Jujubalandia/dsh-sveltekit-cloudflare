@@ -1,0 +1,235 @@
+name: CI
+
+# ------------------------------------------------------------------
+# Dispara em PRs e pushes na main/develop
+# Pipeline: gitleaks → check → lint → test:coverage → build → audit
+# ------------------------------------------------------------------
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# ------------------------------------------------------------------
+# Cancelar runs antigas da mesma branch/PR
+# ------------------------------------------------------------------
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ------------------------------------------------------------------
+# Permissões mínimas
+# ------------------------------------------------------------------
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+jobs:
+  # ================================================================
+  # Job 1 — Secrets scan (roda primeiro, mais rápido)
+  # ================================================================
+  secrets-scan:
+    name: Secrets scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: true
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
+
+  # ================================================================
+  # Job 2 — Verificação completa
+  # ================================================================
+  verify:
+    name: Verify (typecheck, lint, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [secrets-scan]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # ------------------------------------------------------------
+      # 1. Type check
+      # ------------------------------------------------------------
+      - name: Type check
+        run: pnpm check
+
+      # ------------------------------------------------------------
+      # 2. Lint
+      # ------------------------------------------------------------
+      - name: Lint
+        run: pnpm lint
+
+      # ------------------------------------------------------------
+      # 3. Unit tests + coverage
+      # ------------------------------------------------------------
+      - name: Unit tests + coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+      # ------------------------------------------------------------
+      # 4. Build de produção
+      # ------------------------------------------------------------
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      # ------------------------------------------------------------
+      # 5. Audit de dependências
+      # ------------------------------------------------------------
+      - name: Audit de dependências
+        run: pnpm audit --audit-level high
+        continue-on-error: true
+
+  # ================================================================
+  # Job 3 — E2E (Playwright)
+  # ================================================================
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [verify]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Instalar browsers do Playwright
+        run: pnpm exec playwright install --with-deps chromium firefox
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: E2E tests
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Upload traces (falhas)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+  # ================================================================
+  # Job 4 — OWASP + complexidade (informativo, não bloqueia merge)
+  # ================================================================
+  quality-audit:
+    name: OWASP + Complexity (informativo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [verify]
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Instalar gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: OWASP Top 10 check
+        run: |
+          chmod +x scripts/owasp-check.sh
+          ./scripts/owasp-check.sh
+        continue-on-error: true
+
+      - name: Complexity check
+        run: |
+          chmod +x scripts/complexity-check.sh
+          ./scripts/complexity-check.sh
+        continue-on-error: true
+
+  # ================================================================
+  # Job 5 — Gate final (todos os jobs obrigatórios passaram)
+  # ================================================================
+  ci-success:
+    name: CI success gate
+    runs-on: ubuntu-latest
+    needs: [secrets-scan, verify, e2e]
+    if: always()
+    steps:
+      - name: Verificar status dos jobs obrigatórios
+        run: |
+          if [ "${{ needs.secrets-scan.result }}" != "success" ]; then
+            echo "❌ secrets-scan falhou"
+            exit 1
+          fi
+          if [ "${{ needs.verify.result }}" != "success" ]; then
+            echo "❌ verify falhou"
+            exit 1
+          fi
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "❌ e2e falhou"
+            exit 1
+          fi
+          echo "✅ Todos os gates de CI passaram"
