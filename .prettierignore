@@ -37,3 +37,7 @@ pnpm-lock.yaml
 .npm-cache/
 .playwright/
 .corepack/
+
+# Artefatos gerados pelas execuções de e2e
+playwright-report/
+test-results/

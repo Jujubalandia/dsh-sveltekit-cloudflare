@@ -15,6 +15,8 @@ export default tseslint.config(
       'dist/**',
       'coverage/**',
       'reports/**',
+      'playwright-report/**',
+      'test-results/**',
       '.stryker-tmp/**',
       'static/**',
       // Caches locais de tooling, quando ficam dentro do repo.

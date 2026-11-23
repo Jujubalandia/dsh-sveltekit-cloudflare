@@ -39,7 +39,14 @@ run_gate() {
     return 0
   fi
 
-  if ! sh "$SCRIPT"; then
+  # Executa pelo shebang (bash). Rodar com `sh` quebrava tudo: os scripts
+  # usam `set -euo pipefail`, que o dash não suporta.
+  if [ ! -x "$SCRIPT" ]; then
+    echo "  ⚠️  $SCRIPT não é executável — gate pulado."
+    return 0
+  fi
+
+  if ! "$SCRIPT"; then
     echo "  ❌ $SCRIPT falhou."
     FAILED=1
   fi
