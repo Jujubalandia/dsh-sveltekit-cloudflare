@@ -55,7 +55,10 @@ export default defineConfig({
         // problemas de build (CSS do Tailwind, hidratação, chunk quebrado).
         // `wrangler pages dev` exigiria token da Cloudflare por causa do
         // binding de AI, então o preview do adapter é o alvo do teste.
-        command: 'pnpm build && pnpm preview',
+        // `--host 127.0.0.1` é obrigatório: sem ele o Vite escuta em
+        // `localhost`, que no runner do GitHub resolve para ::1, e a
+        // verificação de saúde em http://127.0.0.1:4173 estoura o timeout.
+        command: 'pnpm build && pnpm exec vite preview --host 127.0.0.1 --port 4173',
         url: 'http://127.0.0.1:4173',
         reuseExistingServer: !isCI,
         timeout: 180_000,
