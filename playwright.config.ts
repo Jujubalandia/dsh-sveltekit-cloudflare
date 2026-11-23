@@ -61,7 +61,11 @@ export default defineConfig({
         timeout: 180_000,
         stdout: 'pipe',
         stderr: 'pipe',
+        // `env` SUBSTITUI o ambiente do processo filho (não faz merge). Sem
+        // repassar process.env, o webServer roda sem HOME, PATH e XDG_*, e o
+        // wrangler quebra ao tentar escrever em ~/.config/.wrangler.
         env: {
+          ...(process.env as Record<string, string>),
           NODE_ENV: 'test',
           ENVIRONMENT: 'test'
         }
