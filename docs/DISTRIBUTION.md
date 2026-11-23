@@ -37,8 +37,9 @@ Um mesmo repositório pode servir a dois propósitos:
 | **B — Template** | Quem quer começar projeto novo | `gh repo create --template` ou `degit` | Projeto completo + harness embutido |
 
 O Fluxo A distribui apenas o **harness** (regras, skills, scripts,
-docs). O Fluxo B distribui o **projeto inteiro** (SvelteKit +
-Cloudflare + harness).
+docs) — **não** o app de UI (`src/` + `components.json`, que são
+template assets). O Fluxo B distribui o **projeto inteiro** (SvelteKit
++ Tailwind v4 + shadcn-svelte + Cloudflare + harness).
 
 ### 1.2 — O que é um bundle DSH
 
@@ -92,11 +93,19 @@ dsh-sveltekit-cloudflare/
 ├── AGENTS.md             ← regras operacionais
 ├── harness.config.yml    ← config complementar
 ├── .agents/
-│   ├── skills/           ← 12 SKILL.md
+│   ├── skills/           ← 13 SKILL.md
 │   └── goals/            ← template de goal
 ├── scripts/              ← 8 scripts de verificação
-└── docs/                 ← documentação
+├── docs/                 ← documentação
+├── components.json       ← config do shadcn (template, fora do npm)
+└── src/                  ← app SvelteKit (template, fora do npm)
 ```
+
+**`src/` e `components.json` são template assets.** Eles existem no
+repositório para o Fluxo B (scaffold) e para o desenvolvimento local,
+mas **não** estão no campo `files` do `package.json` e, portanto, **não
+viajam no pacote npm do bundle**. O Fluxo A entrega o harness; o app de
+UI fica para quem clona o repositório.
 
 ### 2.2 — `package.json` (já configurado)
 
@@ -136,6 +145,12 @@ O `package.json` do projeto já contém os campos necessários:
 | `files` | Controla o que vai no `npm publish`. Deve incluir `cordis.patch.yml`. |
 | `name` escopado | Evita colisão no npm. |
 | `keywords` | Facilita descoberta (inclua `dsh-bundle`). |
+
+**O `files` não mudou com a UI.** `src/` e `components.json` são
+**template assets**: existem para o app de exemplo e para o Fluxo B,
+mas não são payload do bundle npm. Se um dia você quiser distribuí-los
+pelo npm, isso é uma decisão de packaging separada — e aumenta a
+superfície de revisão do pacote.
 
 ### 2.3 — `cordis.patch.yml` (já criado)
 
@@ -310,10 +325,16 @@ O template entrega o projeto inteiro:
 meu-novo-app/
 ├── AGENTS.md                    Regras do agente
 ├── harness.config.yml           Config do DSH
-├── .agents/                     12 skills + goals
+├── components.json              Config do CLI do shadcn-svelte
+├── .agents/                     13 skills + goals + commands
 ├── scripts/                     8 scripts de verificação
-├── docs/                        SETUP, HARNESS, FEATURES, DISTRIBUTION
-├── src/                         SvelteKit
+├── docs/                        SETUP, HARNESS, FEATURES, USAGE, DISTRIBUTION
+├── src/
+│   ├── app.html                 Shell + script anti-FOUC
+│   ├── app.css                  Tema Tailwind v4 + shadcn
+│   ├── routes/                  +layout, +page, api/health
+│   └── lib/                     utils, validation, components/ui
+├── _headers                                   Headers de segurança
 ├── workers/                     Workers
 ├── migrations/                  D1
 ├── tests/                       unit, e2e, mutation
@@ -321,6 +342,11 @@ meu-novo-app/
 ├── .github/workflows/           CI/CD
 └── .husky/pre-commit            Hook
 ```
+
+Os dois primeiros itens de UI da lista — `components.json` e `src/` —
+são **template assets**. No Fluxo A (bundle npm) eles ficam de fora; no
+Fluxo B (template) eles vêm junto e o app já sobe com Tailwind v4,
+shadcn-svelte, dark mode e os 8 componentes de prova.
 
 Após clonar, o usuário segue `docs/SETUP.md` para configurar o ambiente.
 
@@ -525,6 +551,8 @@ da versão para criar a GitHub Release. Ver `docs/SETUP.md` para o formato.
 - [ ] `package.json` com `dsh.bundle.patch` apontando para `cordis.patch.yml`
 - [ ] `cordis.patch.yml` presente e válido
 - [ ] `files` inclui `cordis.patch.yml`, `.agents/`, `scripts/`, `docs/`, `AGENTS.md`
+- [ ] `src/` e `components.json` **fora** do `files` (são template assets)
+- [ ] 13 skills em `.agents/skills/` (inclui `shadcn-svelte`)
 - [ ] `name` escopado (`@seu-usuario/...`)
 - [ ] `keywords` incluem `dsh-bundle` e `dsh-plugin`
 - [ ] `version` segue SemVer

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const isCI = !!process.env.CI;
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:8788';
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -18,10 +18,7 @@ export default defineConfig({
         ['html', { open: 'never', outputFolder: 'playwright-report' }],
         ['json', { outputFile: 'playwright-report/results.json' }]
       ]
-    : [
-        ['list'],
-        ['html', { open: 'never', outputFolder: 'playwright-report' }]
-      ],
+    : [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
 
   use: {
     baseURL,
@@ -54,14 +51,24 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command:
-          'pnpm build && pnpm wrangler pages dev .svelte-kit/cloudflare --port 8788 --ip 127.0.0.1',
-        url: 'http://127.0.0.1:8788',
+        // Serve o BUILD de produção, não o dev server: o e2e precisa pegar
+        // problemas de build (CSS do Tailwind, hidratação, chunk quebrado).
+        // `wrangler pages dev` exigiria token da Cloudflare por causa do
+        // binding de AI, então o preview do adapter é o alvo do teste.
+        // `--host 127.0.0.1` é obrigatório: sem ele o Vite escuta em
+        // `localhost`, que no runner do GitHub resolve para ::1, e a
+        // verificação de saúde em http://127.0.0.1:4173 estoura o timeout.
+        command: 'pnpm build && pnpm exec vite preview --host 127.0.0.1 --port 4173',
+        url: 'http://127.0.0.1:4173',
         reuseExistingServer: !isCI,
-        timeout: 120_000,
+        timeout: 180_000,
         stdout: 'pipe',
         stderr: 'pipe',
+        // `env` SUBSTITUI o ambiente do processo filho (não faz merge). Sem
+        // repassar process.env, o webServer roda sem HOME, PATH e XDG_*, e o
+        // wrangler quebra ao tentar escrever em ~/.config/.wrangler.
         env: {
+          ...(process.env as Record<string, string>),
           NODE_ENV: 'test',
           ENVIRONMENT: 'test'
         }

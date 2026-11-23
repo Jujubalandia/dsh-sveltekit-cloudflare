@@ -21,8 +21,9 @@ primeiro `pnpm verify` verde.
 6. [Configuração de secrets](#6-configuração-de-secrets)
 7. [Migrations](#7-migrations)
 8. [Dev server](#8-dev-server)
-9. [Verificação](#9-verificação)
-10. [Troubleshooting](#10-troubleshooting)
+9. [UI: Tailwind v4 + shadcn-svelte](#9-ui-tailwind-v4--shadcn-svelte)
+10. [Verificação](#10-verificação)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -106,7 +107,8 @@ pnpm install
 ```
 
 **O que acontece:**
-- Instala ~50 dependências (SvelteKit, Vitest, Playwright, Wrangler, Stryker, ESLint, etc.).
+- Instala ~60 dependências (SvelteKit, Tailwind CSS v4, shadcn-svelte, Bits UI, Vitest, Playwright, Wrangler, Stryker, ESLint, etc.).
+- Gera o `pnpm-lock.yaml` (o kit passou a versionar lockfile).
 - Roda `pnpm prepare` automaticamente, que configura o Husky (pre-commit hook).
 - Tempo estimado: 1–3 minutos.
 
@@ -608,11 +610,180 @@ pnpm dev
 
 ---
 
-## 9. Verificação
+## 9. UI: Tailwind v4 + shadcn-svelte
+
+O kit inclui um app SvelteKit mínimo com **Tailwind CSS v4** e
+**shadcn-svelte**. Não existe `tailwind.config.js` nem
+`postcss.config.js`: no Tailwind v4 a configuração vive no CSS, e o
+plugin `@tailwindcss/vite` (declarado em `vite.config.ts`) faz a ponte
+com o build do Vite.
+
+### 9.1 — Como o tema é montado
+
+Três arquivos concentram tudo:
+
+| Arquivo | Papel |
+|---------|-------|
+| `src/app.css` | **Arquivo único de tema.** Importa `tailwindcss`, `shadcn-svelte/tailwind.css` e a fonte Inter; define os tokens em `oklch` |
+| `components.json` | Config do **CLI** do shadcn-svelte (registry, aliases, baseColor, preset) |
+| `src/routes/+layout.svelte` | Importa `../app.css`, monta `ModeWatcher`, `Toaster` e `ThemeToggle` |
+
+`src/app.css` tem três blocos que você vai editar com frequência:
+
+- `:root` — tokens do tema claro.
+- `.dark` — tokens do tema escuro (a classe `dark` no `<html>` ativa).
+- `@theme inline` — mapeia os tokens para utilitários Tailwind
+  (`--color-primary: var(--primary)`), para que `bg-primary` e
+  `text-foreground` existam.
+
+Não há um segundo arquivo de tema. Quem procurar `tailwind.config.js`
+não vai encontrar; é assim de propósito.
+
+### 9.2 — O que é `components.json`
+
+É o contrato entre o seu projeto e o CLI. O CLI lê esse arquivo para
+saber onde escrever os componentes e qual registry consultar:
+
+```json
+{
+  "$schema": "https://shadcn-svelte.com/schema.json",
+  "tailwind": { "css": "src/app.css", "baseColor": "neutral" },
+  "aliases": {
+    "components": "$lib/components",
+    "utils": "$lib/utils",
+    "ui": "$lib/components/ui",
+    "hooks": "$lib/hooks",
+    "lib": "$lib"
+  },
+  "registry": "https://shadcn-svelte.com/registry",
+  "style": "vega",
+  "iconLibrary": "lucide"
+}
+```
+
+**Campos que importam:**
+
+| Campo | Valor no kit | Efeito |
+|-------|--------------|--------|
+| `tailwind.css` | `src/app.css` | Onde o CLI injeta imports/tokens |
+| `tailwind.baseColor` | `neutral` | Cor base dos tokens gerados |
+| `registry` | `https://shadcn-svelte.com/registry` | De onde o código é baixado (Gate 9) |
+| `style` | `vega` | Preset visual aplicado na inicialização |
+| `aliases` | `$lib/**` | Caminhos usados nos arquivos gerados |
+
+O preset `vega` foi aplicado na inicialização e **sobrescreveu** o
+`zinc` passado ao CLI; por isso a base ficou `neutral`. **A base color
+não pode ser trocada depois do init** — trocar exige recriar o tema e
+regenerar os componentes.
+
+O CLI fica em **versão fixa** (`shadcn-svelte@1.8.1`) de propósito: um
+`add` baixa código executável do registry, então atualizar o CLI é uma
+decisão revisada, não um `latest` silencioso (Gate 9).
+
+### 9.3 — Convenção de alias
+
+`$lib` é nativo do SvelteKit e é o que o código gerado pelo shadcn usa
+(`$lib/utils.js`, `$lib/components/ui/button/index.js`). O kit também
+expõe `$components`, `$utils`, `$server` e `$workers`, que apontam para
+os mesmos lugares.
+
+**Regra:** prefira o caminho que o arquivo já usa; não saia reescrevendo
+imports gerados. E **nunca crie `src/lib/utils/` como diretório** — o
+alias `$utils` aponta para `src/lib/utils` e competiria com
+`src/lib/utils.ts`, que é o módulo que exporta `cn`.
+
+### 9.4 — Adicionar um componente
+
+```bash
+# Um componente
+pnpm ui:add button
+
+# Vários de uma vez
+pnpm ui:add card dialog table
+
+# Ver o que o CLI faria, sem escrever
+pnpm ui:add button --dry-run
+```
+
+O comando é um alias de `shadcn-svelte add`: consulta o registry,
+baixa o componente e escreve em `src/lib/components/ui/<nome>/`. Como
+é código de terceiro, trate como PR:
+
+1. Leia o diff de `src/lib/components/ui/**`.
+2. Confira se o CLI não escreveu `"latest"` em dependências novas; se
+   escreveu, re-pine a versão.
+3. Só use `--overwrite` (`-o`) quando quiser mesmo substituir o que já
+   existe.
+4. Rode `pnpm check` e `pnpm test:e2e`.
+
+> ⚠️ `pnpm ui:init` **reescreve** `src/app.css`. Use só quando quiser
+> reinicializar o tema, e revise o diff antes de commitar.
+
+### 9.5 — Dark mode
+
+A fonte única de verdade é o `mode-watcher`, na chave
+`mode-watcher-mode` do `localStorage` (`light`, `dark` ou `system`). O
+`ModeWatcher` no `+layout.svelte` aplica a classe `dark` no `<html>`, e
+o `ThemeToggle` (`src/lib/components/theme-toggle.svelte`) alterna entre
+os modos.
+
+O `src/app.html` tem um script **inline** que lê a **mesma** chave antes
+da primeira pintura, para evitar flash do tema errado (FOUC). Se você
+ligar CSP no deploy, esse script precisa de nonce — não duplique a
+lógica de tema em outro lugar.
+
+### 9.6 — Alterar tokens de tema
+
+Para trocar a identidade visual, edite `src/app.css` nos três blocos:
+
+```css
+:root {
+  --primary: oklch(0.205 0 0);          /* tema claro */
+  --radius: 0.625rem;
+}
+
+.dark {
+  --primary: oklch(0.922 0 0);          /* tema escuro */
+}
+
+@theme inline {
+  --color-primary: var(--primary);      /* expõe bg-primary, text-primary */
+}
+```
+
+Regras:
+
+- Mexeu em `:root`, mexa no equivalente em `.dark` — senão o modo escuro
+  fica inconsistente.
+- `@theme inline` é o que cria os utilitários Tailwind; adicionar um
+  token novo em `:root` sem o mapeamento aqui não gera `bg-*`/`text-*`.
+- Componentes em `src/lib/components/ui/**` **não** guardam cor: eles
+  usam os tokens. Ajuste o token, não o componente.
+- Para trocar a base color de verdade, recrie o tema com
+  `pnpm ui:init` (e revise o diff) — mudar só `components.json` não
+  regenera os tokens existentes.
+
+### 9.7 — `remoteBindings: false` no dev
+
+O `svelte.config.js` fixa `platformProxy.remoteBindings: false`. Sem
+isso, o `platformProxy` do adapter-cloudflare assume
+`remoteBindings: true` por padrão e o `pnpm dev` passa a exigir
+`CLOUDFLARE_API_TOKEN` para resolver bindings remotos — um atrito
+desnecessário no desenvolvimento local.
+
+Se você **quiser** usar bindings remotos no dev, mude para `true`
+conscientemente e configure o token; o padrão do kit é local e sem
+token. Os testes e2e rodam contra `pnpm build && pnpm preview` na porta
+4173, justamente para não depender de `wrangler pages dev` nem do
+binding de AI.
+
+---
+
+## 10. Verificação
 
 Após o setup, rode a sequência abaixo. Cada comando valida uma camada.
 
-### 9.1 — Type check
+### 10.1 — Type check
 
 ```bash
 pnpm check
@@ -622,7 +793,7 @@ pnpm check
 **Falha típica:** imports não usados, tipos incompatíveis.
 **Tempo:** ~5s.
 
-### 9.2 — Lint
+### 10.2 — Lint
 
 ```bash
 pnpm lint
@@ -633,7 +804,7 @@ pnpm lint
 **Correção rápida:** `pnpm format` (auto-fix).
 **Tempo:** ~10s.
 
-### 9.3 — Testes unitários
+### 10.3 — Testes unitários
 
 ```bash
 pnpm test
@@ -643,7 +814,7 @@ pnpm test
 **Falha típica:** asserção desatualizada, mock incompleto.
 **Tempo:** ~15s.
 
-### 9.4 — Cobertura
+### 10.4 — Cobertura
 
 ```bash
 pnpm test:coverage
@@ -654,7 +825,7 @@ pnpm test:coverage
 **Relatório:** `coverage/index.html`.
 **Tempo:** ~20s.
 
-### 9.5 — Build
+### 10.5 — Build
 
 ```bash
 pnpm build
@@ -664,7 +835,7 @@ pnpm build
 **Falha típica:** dependência circular, `env` ausente.
 **Tempo:** ~30s.
 
-### 9.6 — E2E (Playwright)
+### 10.6 — E2E (Playwright)
 
 ```bash
 pnpm test:e2e
@@ -679,7 +850,7 @@ Se for a primeira vez:
 pnpm exec playwright install --with-deps chromium firefox
 ```
 
-### 9.7 — Security scan
+### 10.7 — Security scan
 
 ```bash
 pnpm security:scan
@@ -689,7 +860,7 @@ pnpm security:scan
 **Falha típica:** `gitleaks` encontrando falso positivo, `pnpm audit` reportando vulnerabilidade.
 **Tempo:** ~30s.
 
-### 9.8 — Complexity scan
+### 10.8 — Complexity scan
 
 ```bash
 pnpm complexity:scan
@@ -699,7 +870,7 @@ pnpm complexity:scan
 **Falha típica:** função com complexidade > 10.
 **Tempo:** ~20s.
 
-### 9.9 — Pipeline completo
+### 10.9 — Pipeline completo
 
 ```bash
 pnpm verify
@@ -709,7 +880,7 @@ Roda em sequência: `check` → `lint` → `test:coverage` → `build` → `e2e`
 
 **Se todos passarem: ambiente está configurado corretamente.**
 
-### 9.10 — Ordem de execução recomendada
+### 10.10 — Ordem de execução recomendada
 
 Para desenvolvimento diário, use esta ordem:
 
@@ -730,7 +901,7 @@ pnpm complexity:scan
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### Problema: `pnpm install` falha com erro de rede
 
@@ -915,6 +1086,8 @@ Após completar todos os passos, você deve conseguir marcar:
 - [ ] Husky configurado (`.husky/_/` existe)
 - [ ] Scripts executáveis (`chmod +x scripts/*.sh`)
 - [ ] `wrangler whoami` retorna sua conta
+- [ ] `components.json` presente (registry oficial, baseColor `neutral`)
+- [ ] `shadcn-svelte` em versão fixa (sem `latest` no `package.json`)
 
 ### Recursos Cloudflare
 - [ ] D1 dev, staging, prod criados
@@ -947,7 +1120,9 @@ Após completar todos os passos, você deve conseguir marcar:
 
 ### Dev server
 - [ ] `pnpm dev` inicia sem erro
+- [ ] `pnpm dev` não pede `CLOUDFLARE_API_TOKEN` (`remoteBindings: false`)
 - [ ] `curl http://localhost:5173/api/health` retorna 200
+- [ ] Tema claro/escuro alterna sem FOUC
 - [ ] Bindings (DB, KV, R2, AI) acessíveis
 
 ---

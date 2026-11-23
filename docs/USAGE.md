@@ -23,8 +23,9 @@ harness registrado no DSH.
 6. [Fluxo de refatoração](#6-fluxo-de-refatoração)
 7. [Como invocar subagentes](#7-como-invocar-subagentes)
 8. [Como carregar skills](#8-como-carregar-skills)
-9. [FAQ](#9-faq)
-10. [Troubleshooting](#10-troubleshooting)
+9. [UI: componentes e tema](#9-ui-componentes-e-tema)
+10. [FAQ](#10-faq)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
@@ -47,8 +48,11 @@ Dentro da sessão, pergunte ao agente:
 Liste as skills disponíveis no seu catálogo.
 ```
 
-**Esperado:** o agente deve listar as 12 skills do harness
-(`cloudflare-d1`, `cloudflare-kv`, `sveltekit-runes`, etc.).
+**Esperado:** o agente deve listar as 13 skills do harness
+(`cloudflare-d1`, `cloudflare-kv`, `cloudflare-r2`,
+`cloudflare-ai-gateway`, `sveltekit-runes`, `sveltekit-auth`,
+`shadcn-svelte`, `cloudflare-security`, `owasp-top10`, `security-leaks`,
+`code-complexity`, `git-flow`, `agentic-code-review`).
 
 Se ele não listar nada, verifique:
 - O `cordis.patch.yml` está no bundle?
@@ -85,7 +89,7 @@ Pergunte:
 Quantas Security Gates existem neste projeto?
 ```
 
-**Esperado:** o agente deve responder "8" (ou o número correto do seu
+**Esperado:** o agente deve responder "9" (ou o número correto do seu
 `AGENTS.md`).
 
 Se responder algo genérico, verifique se o `AGENTS.md` está no root do
@@ -123,8 +127,8 @@ ou qualquer verificação. Elas disparam automaticamente:
 
 | Momento | O que roda automaticamente |
 |---------|----------------------------|
-| Antes de editar arquivo | `pre-edit-check.sh` (avisa skill + gates) |
-| Depois de editar arquivo | `post-edit-check.sh` (check + lint + test) |
+| Antes de editar arquivo | `pre-edit-check.sh` (avisa skill + gates, inclusive Gate 9 em UI) |
+| Depois de editar arquivo | `post-edit-check.sh` (check + lint + test + `prettier --check` no arquivo, aviso) |
 | Antes de commit | `pnpm lint` + `pnpm check` + gitleaks |
 | Antes de abrir PR | `verify` + `security-scan` + `owasp` + `complexity` |
 | Antes de deploy prod | `security-scan` + approval gate |
@@ -575,7 +579,122 @@ deveria ser dividida.
 
 ---
 
-## 9. FAQ
+## 9. UI: componentes e tema
+
+O kit inclui um app SvelteKit mínimo em `src/`, com **Tailwind CSS v4**
+e **shadcn-svelte**. A UI não é um pacote separado: ela é código do
+projeto em `src/lib/components/ui/`, gerado pelo CLI.
+
+### 9.1 — Adicionar um componente
+
+```bash
+# Um componente
+pnpm ui:add badge
+
+# Vários de uma vez
+pnpm ui:add card dialog table
+
+# Conferir o que seria feito, sem escrever
+pnpm ui:add badge --dry-run
+```
+
+O comando é um alias de `shadcn-svelte add`. Ele consulta
+`components.json`, baixa o componente do registry oficial e escreve em
+`src/lib/components/ui/<nome>/`. No código, importe pelo alias que o
+próprio componente usa:
+
+```svelte
+<script lang="ts">
+  import { Button } from '$lib/components/ui/button/index.js';
+</script>
+
+<Button variant="outline">Salvar</Button>
+```
+
+Depois de adicionar, trate como PR: leia o diff, confira se o CLI não
+escreveu `"latest"` em dependências novas (re-pine) e rode `pnpm check`
++ `pnpm test:e2e`.
+
+**Bits UI 2 (gotcha):** não existe mais `asChild` + `let:props`. Para
+compor um trigger com o seu próprio botão, use o snippet `child`:
+
+```svelte
+<DialogTrigger>
+  {#snippet child({ props })}
+    <Button {...props}>Abrir</Button>
+  {/snippet}
+</DialogTrigger>
+```
+
+### 9.2 — Como o tema funciona
+
+Há um único arquivo de tema: `src/app.css`. Não existe
+`tailwind.config.js` nem `postcss.config.js` — no Tailwind v4 a
+configuração é CSS, e o plugin `@tailwindcss/vite` está em
+`vite.config.ts`.
+
+O arquivo tem três blocos:
+
+- `:root` — tokens do tema claro.
+- `.dark` — tokens do tema escuro.
+- `@theme inline` — mapeia os tokens para utilitários Tailwind
+  (`--color-primary: var(--primary)` → `bg-primary`, `text-primary`).
+
+Para mudar a cara do app, altere o token nos **dois** temas:
+
+```css
+:root {
+  --primary: oklch(0.55 0.18 250);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --primary: oklch(0.75 0.14 250);
+}
+```
+
+Componentes em `ui/` não guardam cor: usam `bg-primary`,
+`text-foreground`, `border-border`, etc. Ajuste o token, não o
+componente.
+
+### 9.3 — Dark mode
+
+A fonte única de verdade é o `mode-watcher`:
+
+- chave `mode-watcher-mode` no `localStorage` (`light`, `dark`, `system`);
+- `ModeWatcher` montado no `src/routes/+layout.svelte`;
+- `ThemeToggle` em `src/lib/components/theme-toggle.svelte`;
+- script inline no `src/app.html` lê a **mesma** chave antes da primeira
+  pintura, para não piscar tema claro em quem usa escuro.
+
+Não crie uma segunda fonte de verdade (store própria, classe em outro
+lugar, `prefers-color-scheme` duplicado). Se ligar CSP, o script inline
+precisa de nonce.
+
+### 9.4 — O que NÃO fazer
+
+| Não faça | Por quê |
+|----------|---------|
+| Editar `src/lib/components/ui/**` à mão | É código regenerável; o próximo `add`/`--overwrite` sobrescreve |
+| Criar `src/lib/utils/` (diretório) | `$utils` aponta para `src/lib/utils` e competiria com `src/lib/utils.ts` |
+| Criar `tailwind.config.js`/`postcss.config.js` | Tailwind v4 se configura em `src/app.css` |
+| Trocar `baseColor` só no `components.json` | Os tokens gerados continuam os antigos; recrie o tema |
+| Deixar `"latest"` no `package.json` | O CLI escreve isso; re-pine (Gate 9) |
+| Rodar `pnpm ui:init` sem revisar | Ele reescreve `src/app.css` |
+| Colocar regra de negócio em `ui/` | Vai em `$lib/server` ou `$lib/` |
+
+### 9.5 — Gate 9 na prática
+
+Todo `pnpm ui:add` baixa **código executável** de um registry remoto.
+Por isso: CLI em versão fixa, `components.json.registry` apontando para
+`https://shadcn-svelte.com/registry`, diff revisado em PR e
+`--overwrite` (`-o`) só com intenção. O `security-scan.sh` confere
+registry e pin. O código de `ui/` fica fora de lint/cobertura, mas
+continua em `svelte-check`, e2e e segurança.
+
+---
+
+## 10. FAQ
 
 ### "Preciso decorar os 5 comandos?"
 
@@ -634,7 +753,7 @@ dsh web
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 Antes de tudo, rode o validador do próprio kit — ele checa os contratos
 que o DSH exige e que falham em silêncio (linha de plugin fora do
@@ -649,6 +768,94 @@ E, para ver o que o DSH realmente carregou do bundle:
 ```bash
 dsh --profile web --dump-config | grep sveflare
 ```
+
+### Componente novo não aparece na página
+
+**Causas prováveis:**
+- O `pnpm ui:add <componente>` não rodou (ou rodou em outro diretório).
+- O import usa um alias que não existe, ou aponta para um arquivo fora
+  de `src/lib/components/ui/<nome>/`.
+- O componente foi escrito, mas a página/rota não importa ele.
+
+**Solução:**
+
+```bash
+# O componente existe?
+ls src/lib/components/ui/<nome>/
+
+# O CLI escreveria onde você espera?
+pnpm ui:add <nome> --dry-run
+
+# O import no seu arquivo está correto?
+grep -rn "components/ui/<nome>" src/
+```
+
+Prefira o import que o código gerado usa:
+`import { Button } from '$lib/components/ui/button/index.js'`. Se o
+`pnpm dev` já estava rodando, salve o arquivo de novo para o HMR
+reprocessar.
+
+### Tema não é aplicado
+
+**Causas prováveis:**
+- `src/app.css` não é importado no `src/routes/+layout.svelte`.
+- O plugin `@tailwindcss/vite` sumiu do `vite.config.ts`.
+- Você editou o token só em `:root` (claro) e o app está em `.dark`.
+- Tokens novos em `:root` sem o mapeamento correspondente em
+  `@theme inline`.
+
+**Solução:**
+
+```bash
+# O layout importa o CSS?
+grep -n "app.css" src/routes/+layout.svelte
+
+# O plugin está no Vite?
+grep -n "tailwindcss" vite.config.ts
+
+# Limpar cache do SvelteKit e subir de novo
+rm -rf .svelte-kit
+pnpm dev
+```
+
+Lembre: não existe `tailwind.config.js`; se você criou um, ele não é
+lido. A configuração é o `src/app.css`.
+
+### `pnpm dev` pede `CLOUDFLARE_API_TOKEN`
+
+**Causa:** o `platformProxy` do adapter-cloudflare assume
+`remoteBindings: true` por padrão. Com isso, o dev tenta resolver os
+bindings na Cloudflare e exige token.
+
+**Solução:** o kit fixa `remoteBindings: false` no `svelte.config.js`
+para desenvolvimento local. Confirme:
+
+```bash
+grep -n "remoteBindings" svelte.config.js
+# Esperado: remoteBindings: false
+```
+
+Se você mudou para `true` de propósito, o token passa a ser
+obrigatório. Para o dia a dia local, volte para `false`.
+
+### `"latest"` aparece no `package.json`
+
+**Causa:** o CLI do shadcn-svelte escreve `"latest"` ao adicionar uma
+dependência nova. Isso quebra reprodutibilidade e o Gate 9.
+
+**Solução:**
+
+```bash
+# Veja o que ficou como latest
+grep -n '"latest"' package.json
+
+# Troque pela versão real instalada
+pnpm list <pacote>
+# edite package.json para a versão exata (ex: "^1.2.3")
+pnpm install
+```
+
+Nunca commite `"latest"`. Se o CLI reintroduzir, re-pine antes do commit.
 
 ### Comandos `/sveflare-*` não aparecem no autocomplete
 

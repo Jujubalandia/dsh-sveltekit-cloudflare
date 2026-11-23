@@ -31,7 +31,7 @@
 # automaticamente `<projectRoot>/.agents/skills` e
 # `<projectRoot>/.dsh/skills`.
 #
-# Como este kit É o próprio projeto SvelteKit, as 12 skills em
+# Como este kit É o próprio projeto SvelteKit, as 13 skills em
 # `.agents/skills/` são registradas pelo provider padrão do DSH — não
 # é preciso inserir nem sobrescrever linha alguma aqui.
 #

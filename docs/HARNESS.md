@@ -88,6 +88,34 @@ O harness deste kit cobre especificamente:
 | Testes fracos | Mutation testing com Stryker |
 | Deploy inseguro | Approval gate + staging obrigatório |
 | Review de agentes | Skill `agentic-code-review` + subagente verificador |
+| Supply chain de UI | Gate 9 + `security-scan.sh` + skill `shadcn-svelte` |
+| Tema / FOUC | `mode-watcher` + script inline no `src/app.html` |
+
+### Security Gates (9)
+
+Os gates são regras que o agente **não pode** violar. A definição
+completa fica em `AGENTS.md`, seção 5; aqui está o mapa de onde cada um
+é aplicado:
+
+| # | Gate | Regra | Enforcement |
+|---|------|-------|-------------|
+| 1 | Secrets | Nunca hardcode; `wrangler secret put` | gitleaks (pre-commit + CI) |
+| 2 | Input | Zod em toda entrada; CORS sem `*` em prod | `src/lib/validation.ts`, OWASP A03/A05 |
+| 3 | D1 | Prepared statements; migrations versionadas | `owasp-check`, review |
+| 4 | R2 | Bucket privado, signed URL ≤15min, validar tipo/tamanho | `owasp-check`, review |
+| 5 | AI Gateway | Guardrails + rate limit + log com redaction | `owasp-check`, review |
+| 6 | OWASP | Top 10 verificado | `scripts/owasp-check.sh` |
+| 7 | Prompt Injection | Input sanitizado antes do LLM | `owasp-check` A03 |
+| 8 | Deploy | Staging → smoke → aprovação → produção | `.github/workflows/`, environment protegido |
+| 9 | Supply chain de UI | CLI fixo, registry oficial, diff de `ui/` revisado | `scripts/security-scan.sh`, review |
+
+**Gate 9 em detalhe:** o `shadcn-svelte add` baixa **código
+executável** de um registry remoto e escreve em
+`src/lib/components/ui/`. Por isso o CLI fica em versão fixa,
+`components.json.registry` aponta para
+`https://shadcn-svelte.com/registry`, todo `add` entra por PR com o
+diff lido, `--overwrite` (`-o`) só com intenção, e componente copiado
+de blog/GitHub passa pelo mesmo review.
 
 ---
 
@@ -147,6 +175,35 @@ ganha. Skills são **especializações**, não overrides.
 | Config | `harness.config.yml` | Subagentes, hooks, sandbox |
 | Scripts | `scripts/*.sh` | Verificações determinísticas |
 | CI | `.github/workflows/*.yml` | Gates de merge |
+
+### Camada de UI
+
+O kit não é só bundle de convenções: ele inclui um app SvelteKit mínimo
+em `src/`, com **Tailwind CSS v4** e **shadcn-svelte**. A camada de UI
+tem quatro peças:
+
+| Peça | Onde | Papel |
+|------|------|-------|
+| Tema | `src/app.css` | Tokens `oklch` em `:root`/`.dark` e o mapeamento `@theme inline` |
+| Config do CLI | `components.json` | Registry, aliases, `baseColor: neutral`, preset `vega` |
+| Componentes | `src/lib/components/ui/**` | 8 componentes gerados pelo CLI (vendorizados) |
+| Tema claro/escuro | `mode-watcher` + `src/app.html` | Fonte única: chave `mode-watcher-mode` no `localStorage` |
+
+**Design system:** os componentes não carregam cor própria — usam os
+tokens (`bg-primary`, `text-foreground`, `border-border`, ...). A
+identidade visual se muda em `src/app.css`, não dentro de `ui/`.
+
+**Dark mode:** o `ModeWatcher` aplica a classe `dark` no `<html>`. O
+script inline do `src/app.html` lê a **mesma** chave antes da primeira
+pintura para evitar flash do tema errado (FOUC). Se o deploy tiver CSP,
+esse inline precisa de nonce.
+
+**Política de `ui/` vendorizado:** `src/lib/components/ui/**` é
+regenerável, então fica **fora** de ESLint, Prettier, cobertura, knip,
+jscpd e complexidade. Mas **continua dentro** de `svelte-check`, testes
+e2e e varredura de segurança — não ser linted não significa não ser
+revisado. Não edite esses arquivos à mão: adicione com
+`pnpm ui:add <componente>` e revise o diff (Gate 9).
 
 ---
 
@@ -225,7 +282,7 @@ Dentro da sessão, pergunte ao agente:
 Leia AGENTS.md e me diga quantas Security Gates existem.
 ```
 
-Se o agente responder "8 gates" (ou o número correto do seu
+Se o agente responder "9 gates" (ou o número correto do seu
 `AGENTS.md`), o harness está carregando.
 
 ---
@@ -267,7 +324,7 @@ sob demanda:
 ### 4.3 — Custo de contexto
 
 Skills são carregadas sob demanda justamente para não inflar o
-contexto. Carregar todas as 12 skills de uma vez consumiria ~15k
+contexto. Carregar todas as 13 skills de uma vez consumiria ~15k
 tokens. Carregar 2–3 por tarefa mantém o contexto enxuto.
 
 **Regra prática:** 2–3 skills por tarefa. Se precisar de mais, é sinal
@@ -282,6 +339,29 @@ ganha. **Skills são especializações, não overrides.**
 Exceção: se você carregar uma skill **explicitamente** e ela contradiz
 o `AGENTS.md` **nessa tarefa específica**, prevalece a skill — mas o
 agente deve sinalizar o conflito.
+
+### 4.5 — As 13 skills do kit
+
+| # | Skill | Quando carrega |
+|---|-------|----------------|
+| 1 | `cloudflare-d1` | SQL, migrations e arquivos em `workers/src/db/` |
+| 2 | `cloudflare-kv` | Cache, feature flags e TTL |
+| 3 | `cloudflare-r2` | Upload, signed URLs e objetos |
+| 4 | `cloudflare-ai-gateway` | Chamadas a LLM, guardrails, prompt injection |
+| 5 | `sveltekit-runes` | Qualquer componente `.svelte` novo ou refatorado |
+| 6 | `sveltekit-auth` | Sessão, guards e form actions de login |
+| 7 | `shadcn-svelte` | `src/lib/components/ui/**`, `components.json`, `src/app.css`, `src/lib/utils.ts` e revisão de código vindo do registry |
+| 8 | `cloudflare-security` | Headers, CORS e hardening pré-deploy |
+| 9 | `owasp-top10` | Auth, input, endpoints, DB, upload e LLM |
+| 10 | `security-leaks` | Antes de commit, PR e deploy |
+| 11 | `code-complexity` | Adicionar ou refatorar funções |
+| 12 | `git-flow` | Branches, commits, PRs e releases |
+| 13 | `agentic-code-review` | Revisão de PR e triagem de código gerado por agente |
+
+A skill `shadcn-svelte` é a que fecha o Gate 9: ela documenta
+`components.json`, aliases, tokens `oklch`, dark mode e acessibilidade
+via Bits UI — e é carregada pelo hook `pre-edit-check.sh` quando o
+arquivo tocado é de UI.
 
 ---
 

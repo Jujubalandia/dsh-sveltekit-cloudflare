@@ -16,8 +16,12 @@ const config = {
       platformProxy: {
         configPath: 'wrangler.toml',
         environment: undefined,
-        experimentalJsonConfig: false,
-        persist: true
+        persist: true,
+        // Sem isto o wrangler assume `remoteBindings: true` e o `pnpm dev`
+        // tenta abrir uma conexão remota, falhando com "CLOUDFLARE_API_TOKEN
+        // is required" mesmo com bindings locais. Desenvolvimento local deve
+        // usar o miniflare, não a conta Cloudflare.
+        remoteBindings: false
       }
     }),
 
@@ -28,9 +32,9 @@ const config = {
       $workers: 'workers/src'
     },
 
-    csrf: {
-      checkOrigin: true
-    },
+    // `csrf.checkOrigin` foi depreciado e virou `csrf.trustedOrigins`. O
+    // comportamento padrão já é rejeitar origem cruzada, então não precisa
+    // de bloco nenhum. Só declare `trustedOrigins` se houver origem extra.
 
     // Headers de segurança aplicados pelo SvelteKit
     // (reforçados também via _headers do Cloudflare Pages)

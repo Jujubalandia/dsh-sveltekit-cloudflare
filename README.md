@@ -2,7 +2,8 @@
 
 Kit operacional completo para trabalhar com **DeepSeek Harness (DSH)**
 em projetos **SvelteKit + TypeScript + Cloudflare** (Pages, Workers,
-D1, KV, R2, AI Gateway), incorporando práticas de:
+D1, KV, R2, AI Gateway), com **Tailwind CSS v4** e **shadcn-svelte** no
+design system. Incorpora práticas de:
 
 - **Addy Osmani** — *Practical Loop Engineering*, *Agentic Code Quality*,
   *The New SDLC with Vibe Coding*, *Agentic Code Review*
@@ -38,11 +39,14 @@ engenharia com segurança".
 
 Este kit fornece:
 
+- **App mínimo real** (`src/`) — SvelteKit 2 + Svelte 5, Tailwind CSS v4 e
+  shadcn-svelte (8 componentes, dark mode e `GET /api/health`). O kit não é
+  só um bundle de convenções: o app de prova é o ponto de partida.
 - **Regras operacionais** (`AGENTS.md`) — o que o agente pode e não pode fazer.
-- **12 skills** (`.agents/skills/`) — contexto especializado carregado sob demanda.
+- **13 skills** (`.agents/skills/`) — contexto especializado carregado sob demanda.
 - **5 subagentes** — drafter, verifier, judge, security auditor, complexity auditor.
 - **Hooks automáticos** — verificações antes/depois de cada edição.
-- **8 Security Gates** — bloqueiam ações inseguras.
+- **9 Security Gates** — bloqueiam ações inseguras.
 - **Scripts determinísticos** — verify, security-scan, owasp-check, complexity-check, smoke-test.
 - **CI completo** — gitleaks, testes, cobertura, build, audit.
 - **Goal template** — critérios de aceitação versionados por tarefa.
@@ -57,30 +61,59 @@ Este kit fornece:
 ├── README.md                       Este arquivo
 ├── CHANGELOG.md                    Changelog (Keep a Changelog)
 ├── CONVERSATION.md                 Histórico de decisões
+├── PUBLISH-INSTRUCTIONS.md         Passo a passo de publicação do bundle
 ├── harness.config.yml              Config do DSH (subagentes, hooks, sandbox)
+├── components.json                 Config do CLI do shadcn-svelte (registry, aliases)
+├── package.json                    Scripts e dependências
+├── pnpm-lock.yaml                  Lockfile (reprodutibilidade)
+├── svelte.config.js                SvelteKit + adapter Cloudflare (remoteBindings: false)
+├── vite.config.ts                  Vite + plugin @tailwindcss/vite
+├── vitest.config.ts                Vitest + coverage
+├── playwright.config.ts            Playwright (e2e contra o build)
+├── stryker.config.mjs              Stryker mutation testing
+├── eslint.config.js                ESLint flat config
+├── .prettierrc / .prettierignore   Formatação
+├── knip.json / .jscpd.json         Dead code e duplicação
 ├── docs/
 │   ├── SETUP.md                    Como configurar o ambiente
-│   └── HARNESS.md                  Como usar e estender o harness
+│   ├── HARNESS.md                  Como usar e estender o harness
 │   ├── FEATURES.md                 Inventário de componentes
-|   └── DISTRIBUTION.md             Como publicar e distribuir
+│   ├── USAGE.md                    Uso diário e troubleshooting
+│   └── DISTRIBUTION.md             Como publicar e distribuir
 ├── .agents/
 │   ├── goals/current.md            Template de goal por tarefa
-│   └── skills/                     12 skills carregáveis
+│   ├── commands/                   5 comandos /sveflare-*
+│   └── skills/                     13 skills carregáveis
 │       ├── cloudflare-d1/
 │       ├── cloudflare-kv/
 │       ├── cloudflare-r2/
 │       ├── cloudflare-ai-gateway/
 │       ├── sveltekit-runes/
 │       ├── sveltekit-auth/
+│       ├── shadcn-svelte/
 │       ├── cloudflare-security/
 │       ├── owasp-top10/
 │       ├── security-leaks/
 │       ├── code-complexity/
 │       ├── git-flow/
 │       └── agentic-code-review/
+├── src/
+│   ├── app.html                    Shell HTML + script anti-FOUC do tema
+│   ├── app.css                     Tokens Tailwind v4 + shadcn (oklch)
+│   ├── routes/
+│   │   ├── +layout.svelte          app.css, ModeWatcher, Toaster, ThemeToggle
+│   │   ├── +page.svelte            Página de prova dos 8 componentes
+│   │   └── api/health/+server.ts   GET /api/health
+│   └── lib/
+│       ├── utils.ts                export { cn } from 'cn'
+│       ├── validation.ts           Schemas Zod (Gate 2)
+│       └── components/
+│           ├── theme-toggle.svelte Toggle via mode-watcher
+│           └── ui/                 8 componentes shadcn (vendorizado)
+├── _headers                                      Headers de segurança (Cloudflare Pages)
 ├── scripts/
 │   ├── verify.sh                   Pipeline completo
-│   ├── security-scan.sh            Secrets + deps + OWASP + D1
+│   ├── security-scan.sh            Secrets + deps + OWASP + D1 + Gate 9
 │   ├── owasp-check.sh              OWASP Top 10 automatizado
 │   ├── complexity-check.sh         Complexidade + duplicação + dead code
 │   ├── smoke-test.sh               Pós-deploy
@@ -94,8 +127,7 @@ Este kit fornece:
 ├── tests/
 │   ├── setup.ts                    Mocks de bindings
 │   ├── unit/                       Testes unitários
-│   ├── e2e/                        Testes end-to-end
-│   └── mutation/                   Config Stryker
+│   └── e2e/                        Testes end-to-end
 ├── .github/workflows/
 │   ├── ci.yml                      Pipeline CI
 │   └── release.yml                 Release por tag
@@ -110,6 +142,10 @@ Este kit fornece:
 # Desenvolvimento
 pnpm dev                            # Dev server :5173
 pnpm build                          # Build produção
+
+# UI (Tailwind v4 + shadcn-svelte)
+pnpm ui:add button                  # Adicionar componente do registry
+pnpm ui:init                        # Reinicializar o shadcn (reescreve app.css)
 
 # Verificação
 pnpm check                          # Type check
@@ -180,7 +216,7 @@ Configurados em `harness.config.yml`, seção `subagents`.
 
 ## Security Gates
 
-O agente **não pode** violar estas 8 regras:
+O agente **não pode** violar estas 9 regras:
 
 1. **Secrets** — nunca hardcode. `wrangler secret put`. CI roda gitleaks.
 2. **Input** — Zod em todo endpoint. CORS sem `*` em produção.
@@ -190,6 +226,9 @@ O agente **não pode** violar estas 8 regras:
 6. **OWASP** — Top 10 verificado em `scripts/owasp-check.sh`.
 7. **Prompt Injection** — input do usuário nunca vai direto para LLM.
 8. **Deploy** — staging → smoke → aprovação → produção.
+9. **Supply chain de UI** — CLI do shadcn fixo, registry oficial e todo
+   `add` revisado em PR. Componente vem de código executável baixado da
+   internet; `scripts/security-scan.sh` verifica registry e pin.
 
 Detalhes completos em `AGENTS.md`, seção 5.
 
@@ -240,6 +279,8 @@ dsh
 ### Stack
 
 - SvelteKit — kit.svelte.dev
+- Tailwind CSS v4 — tailwindcss.com
+- shadcn-svelte — shadcn-svelte.com
 - Cloudflare Workers — developers.cloudflare.com/workers/
 - Cloudflare D1 — developers.cloudflare.com/d1/
 - Cloudflare KV — developers.cloudflare.com/kv/
@@ -267,9 +308,9 @@ Dentro da sessão, pergunte:
 Liste as skills disponíveis no seu catálogo.
 ```
 
-**Esperado:** as 12 skills do harness (`cloudflare-d1`, `cloudflare-kv`,
+**Esperado:** as 13 skills do harness (`cloudflare-d1`, `cloudflare-kv`,
 `cloudflare-r2`, `cloudflare-ai-gateway`, `sveltekit-runes`,
-`sveltekit-auth`, `cloudflare-security`, `owasp-top10`,
+`sveltekit-auth`, `shadcn-svelte`, `cloudflare-security`, `owasp-top10`,
 `security-leaks`, `code-complexity`, `git-flow`,
 `agentic-code-review`).
 
@@ -329,7 +370,7 @@ Digite `/sveflare` no prompt e pressione Tab.
 | Agente ignora o `AGENTS.md` | DSH iniciado fora do workspace | Sempre iniciar com `dsh web` de dentro do projeto |
 | Hook não dispara | Scripts não executáveis | `chmod +x scripts/*.sh` |
 
-Guia completo em [`docs/USAGE.md`, seção 10](docs/USAGE.md#10-troubleshooting).
+Guia completo em [`docs/USAGE.md`, seção 11](docs/USAGE.md#11-troubleshooting).
 
 ---
 

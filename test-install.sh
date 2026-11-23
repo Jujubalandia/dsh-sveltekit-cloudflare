@@ -10,7 +10,7 @@
 #   2. Cria um profile DEDICADO de teste (não mexe no seu profile
 #      `web`) e instala este diretório como bundle.
 #   3. Verifica que a camada do bundle aparece em --dump-config.
-#   4. Verifica que as 12 skills foram registradas.
+#   4. Verifica que as 13 skills foram registradas.
 #   5. Roda um boot curto para capturar warnings de boot.
 #
 # Uso:
@@ -135,10 +135,10 @@ fi
 # 5. Skills registradas
 # --------------------------------------------------------------
 echo ""
-echo "▶ [5/5] Verificando as 12 skills do kit"
+echo "▶ [5/5] Verificando as 13 skills do kit"
 SKILLS="agentic-code-review cloudflare-ai-gateway cloudflare-d1 cloudflare-kv \
 cloudflare-r2 cloudflare-security code-complexity git-flow owasp-top10 \
-security-leaks sveltekit-auth sveltekit-runes"
+security-leaks shadcn-svelte sveltekit-auth sveltekit-runes"
 
 FOUND=0
 for s in $SKILLS; do
@@ -149,15 +149,15 @@ for s in $SKILLS; do
   fi
 done
 
-if [ "$FOUND" -eq 12 ]; then
-  ok "as 12 skills aparecem no dump"
+if [ "$FOUND" -eq 13 ]; then
+  ok "as 13 skills aparecem no dump"
 elif [ "$FOUND" -gt 0 ]; then
-  info "$FOUND/12 skills no dump"
+  info "$FOUND/13 skills no dump"
   echo "     O --dump-config pode não listar skills; confirme num boot"
-  echo "     interativo que o catálogo de skills mostra as 12."
+  echo "     interativo que o catálogo de skills mostra as 13."
 else
   info "nenhuma skill no dump (esperado: --dump-config lista plugins, não skills)"
-  echo "     Confirme num boot interativo que o catálogo mostra as 12 skills."
+  echo "     Confirme num boot interativo que o catálogo mostra as 13 skills."
   echo "     Se não mostrar, verifique se cada SKILL.md começa com"
   echo "     frontmatter '---' contendo name e description."
 fi

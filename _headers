@@ -1,0 +1,30 @@
+# ==============================================================
+# static/_headers — headers HTTP para Cloudflare Pages
+#
+# O Cloudflare Pages lê este arquivo no deploy. O Worker (via
+# src/hooks.server.ts) aplica os mesmos headers para o que passa por SSR,
+# então os dois caminhos ficam coerentes.
+#
+# CSP NÃO está ligada aqui: o Svelte injeta <style> e o script anti-FOUC do
+# app.html é inline. Ligar CSP exige nonce (SvelteKit: kit.csp) e testar de
+# novo o dark mode. Ver docs/HARNESS.md.
+# ==============================================================
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# Assets com hash no nome podem ser cacheados para sempre.
+/_app/immutable/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# O HTML precisa revalidar para um deploy aparecer.
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Health check não deve ser cacheado.
+/api/health
+  Cache-Control: no-store

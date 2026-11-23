@@ -52,7 +52,8 @@ test.describe('Health check', () => {
     expect(contentType).toContain('application/json');
 
     const body = await res.json();
-    expect(body).toBeTypeOf('object');
+    // `toBeTypeOf` é matcher do Vitest, não do Playwright.
+    expect(typeof body).toBe('object');
   });
 
   test('health reporta status ok', async ({ request }) => {
@@ -72,9 +73,7 @@ test.describe('Headers de segurança', () => {
     const res = await request.get('/');
     const headers = res.headers();
     // Cloudflare normalmente injeta; se ausente, é aviso, não falha dura
-    expect(
-      headers['x-content-type-options'] ?? 'nosniff'
-    ).toContain('nosniff');
+    expect(headers['x-content-type-options'] ?? 'nosniff').toContain('nosniff');
   });
 
   test('não expõe versão do servidor', async ({ request }) => {
@@ -121,9 +120,7 @@ test.describe('Qualidade da página', () => {
     await page.waitForLoadState('networkidle');
 
     // Ignora erros conhecidos de dev (HMR, favicon)
-    const meaningful = errors.filter(
-      (e) => !/favicon|hmr|vite/i.test(e)
-    );
+    const meaningful = errors.filter((e) => !/favicon|hmr|vite/i.test(e));
     expect(meaningful).toEqual([]);
   });
 

@@ -12,7 +12,8 @@
 #   2. Dependências       (pnpm audit)
 #   3. D1 migrations      (wrangler d1 migrations list)
 #   4. OWASP Top 10       (scripts/owasp-check.sh)
-#   5. AI Gateway         (verificação manual assistida)
+#   5. Supply chain de UI (Gate 9: registry do shadcn-svelte)
+#   6. AI Gateway         (verificação manual assistida)
 # ==============================================================
 
 set -euo pipefail
@@ -146,9 +147,52 @@ else
 fi
 
 # --------------------------------------------------------------
-# 5. AI Gateway — checklist manual assistida
+# 5. Supply chain de UI — Gate 9 (shadcn-svelte)
 # --------------------------------------------------------------
-banner "[5/5] AI Gateway — checklist manual"
+banner "[5/6] Supply chain de UI (Gate 9)"
+
+OFFICIAL_REGISTRY="https://shadcn-svelte.com/registry"
+
+if [ -f "components.json" ]; then
+  REGISTRY=$(node -e 'try{const j=require("./components.json");process.stdout.write(j.registry||"")}catch{}' 2>/dev/null || true)
+  if [ "$REGISTRY" = "$OFFICIAL_REGISTRY" ]; then
+    ok "components.json aponta para o registry oficial"
+  else
+    fail "components.json.registry não é o oficial: ${REGISTRY:-'(vazio)'} — Gate 9"
+  fi
+else
+  warn "components.json ausente (shadcn-svelte não inicializado)"
+fi
+
+# O CLI do registry baixa código executável: precisa estar em versão fixa.
+CLI_VERSION=$(node -e 'try{const p=require("./package.json");process.stdout.write(p.devDependencies?.["shadcn-svelte"]??"")}catch{}' 2>/dev/null || true)
+if [ -z "$CLI_VERSION" ]; then
+  warn "shadcn-svelte não declarado em devDependencies"
+elif [ "$CLI_VERSION" = "latest" ] || [ "${CLI_VERSION#^}" != "$CLI_VERSION" ] || [ "${CLI_VERSION#~}" != "$CLI_VERSION" ]; then
+  warn "shadcn-svelte não está pinado (${CLI_VERSION}); Gate 9 exige versão exata"
+else
+  ok "shadcn-svelte pinado em ${CLI_VERSION}"
+fi
+
+# Nenhuma dependência pode ficar como "latest".
+LATEST_COUNT=$(node -e '
+try {
+  const p = require("./package.json");
+  const all = { ...p.dependencies, ...p.devDependencies };
+  process.stdout.write(String(Object.values(all).filter(v => v === "latest").length));
+} catch { process.stdout.write("0"); }
+' 2>/dev/null || echo "0")
+if [ "${LATEST_COUNT:-0}" -gt 0 ]; then
+  fail "${LATEST_COUNT} dependência(s) em \"latest\" — fixe as versões"
+else
+  ok "nenhuma dependência em \"latest\""
+fi
+
+
+# --------------------------------------------------------------
+# 6. AI Gateway — checklist manual assistida
+# --------------------------------------------------------------
+banner "[6/6] AI Gateway — checklist manual"
 
 echo "Verifique no dashboard Cloudflare (não automatizável aqui):"
 echo "  [ ] Guardrails ativos no AI Gateway"

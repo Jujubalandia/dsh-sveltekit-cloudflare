@@ -90,6 +90,17 @@ case "$FILE" in
     else
       echo "  ${GREEN}✅${NC} lint OK"
     fi
+
+    # Formatação: avisa, não falha. `pnpm format` resolve, e o CI já roda
+    # `prettier --check` como gate de verdade. Arquivos em .prettierignore
+    # (inclusive src/lib/components/ui/**) passam direto.
+    echo "  ${YELLOW}▶${NC} formatação (arquivo: $FILE)"
+    if ! pnpm exec prettier --check "$FILE" > /tmp/dsh-postedit-fmt.log 2>&1; then
+      echo "  ${YELLOW}⚠${NC}  fora do padrão do Prettier (rode: pnpm format)"
+      tail -3 /tmp/dsh-postedit-fmt.log | sed 's/^/     /'
+    else
+      echo "  ${GREEN}✅${NC} formatação OK"
+    fi
     ;;
 esac
 
