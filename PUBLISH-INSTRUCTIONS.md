@@ -26,7 +26,7 @@ O `npm pack --dry-run` deve listar no mínimo:
 - `package.json`
 - `cordis.patch.yml`
 - `lib/` (o plugin dos comandos `/sveflare-*`)
-- `.agents/` (as 12 skills + `hooks.json` + `commands/` + `templates/`)
+- `.agents/` (as 13 skills + `hooks.json` + `commands/` + `templates/`)
 - `scripts/` (os 8 `.sh` + `hook-dispatch.mjs` + `validate-kit.mjs`)
 - `docs/`
 - `AGENTS.md`
@@ -39,6 +39,10 @@ Se algum desses faltar, ajuste o campo `files` do `package.json`.
 > são artefatos do repositório-projeto, não do bundle. Quem quiser o kit
 > completo (como scaffold de projeto SvelteKit) deve clonar o repositório
 > em vez de instalar o pacote npm.
+>
+> O mesmo vale para `src/` e `components.json`: são **template assets**
+> (o app de UI com Tailwind v4 + shadcn-svelte), não payload do bundle.
+> Eles viajam no clone/template, não no `npm pack`.
 
 ---
 
@@ -206,9 +210,9 @@ você passou no `add`).
   `.agents/commands/*.md`.
 - Insere a linha `sveflare-hooks`, montando
   `@deepseek-ai/dsh-hooks-claude-code` apontando para `.agents/hooks.json`.
-- Entrega 12 skills em `.agents/skills/`, descobertas pelo
-  `@deepseek-ai/dsh-skill-filesystem` que o `dsh-base` já monta com
-  `includeDefaultRoots: true`.
+- Entrega 13 skills em `.agents/skills/` (incluindo `shadcn-svelte`),
+  descobertas pelo `@deepseek-ai/dsh-skill-filesystem` que o `dsh-base`
+  já monta com `includeDefaultRoots: true`.
 
 **Por que os comandos precisam de um plugin:** o `@deepseek-ai/dsh-commands`
 é um registry em que cada plugin se registra **por código**
@@ -224,6 +228,11 @@ você passou no `add`).
   Definition do seam `ctx.subagents` e não expõe config `agents`. Papéis
   nomeados no DSH são **Agent Presets**: um diretório com `agent.cordis.yml`
   descoberto pelos preset roots — não uma linha de bundle.
+- **Não entrega o app de UI (`src/` + `components.json`).** Eles são
+  **template assets**: existem para o Fluxo B (scaffold) e para o
+  desenvolvimento local, mas o campo `files` do `package.json` não os
+  inclui. O bundle instala harness, skills e comandos — não o app
+  SvelteKit com Tailwind v4 + shadcn-svelte.
 - **Não registra PreCommit nem PrePR.** Esses não são eventos do bridge de
   hooks do DSH. Eles vivem nos hooks de git: `.husky/pre-commit` e
   `.husky/pre-push`.

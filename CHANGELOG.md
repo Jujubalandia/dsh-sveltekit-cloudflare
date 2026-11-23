@@ -95,6 +95,73 @@ Versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - Adicionado check automatizado de CORS wildcard em produção.
 - Adicionado check de tokens em localStorage.
 
+## [1.1.0] - 2026-11-22
+
+### Added
+
+- **Tailwind CSS v4** via `@tailwindcss/vite`. Sem `tailwind.config.js` nem
+  `postcss.config.js`: o tema vive em `src/app.css`.
+- **shadcn-svelte 1.8.1** (preset `vega`, base color `neutral`), com
+  `components.json`, `src/lib/utils.ts` (`cn`) e os scripts `pnpm ui:add` /
+  `pnpm ui:init`.
+- Oito componentes iniciais: `button`, `card`, `input`, `label`, `dialog`,
+  `dropdown-menu`, `table`, `sonner`.
+- App mínimo de verdade: `src/app.html`, `src/app.css`, `src/routes/+layout.svelte`,
+  `src/routes/+page.svelte` (página de prova dos 8 componentes) e
+  `GET /api/health`.
+- Dark mode com `mode-watcher` (chave `mode-watcher-mode`) e script anti-FOUC
+  no `app.html`.
+- `src/lib/validation.ts` com schemas Zod, para o Gate 2 ter onde morar.
+- **13ª skill: `shadcn-svelte`** — components.json, CLI, aliases, tokens,
+  dark mode, acessibilidade e Gate 9.
+- **Gate 9: supply chain de UI** — CLI pinado, registry oficial e diff de
+  `ui/` revisado; verificado por `scripts/security-scan.sh`.
+- `static/_headers` com os headers de segurança para Cloudflare Pages.
+
+### Changed
+
+- `package.json` 1.0.0 → 1.1.0; `@cloudflare/workers-types` alinhado ao peer do
+  wrangler (`^5`).
+- `svelte.config.js`: `platformProxy.remoteBindings: false`. Sem isso o
+  `pnpm dev` exigia `CLOUDFLARE_API_TOKEN` mesmo com bindings locais.
+- `svelte.config.js`: removido `csrf.checkOrigin` (depreciado) e
+  `platformProxy.experimentalJsonConfig` (removido do wrangler).
+- `vitest.config.ts` atualizado para o Vitest 4 (`hot` e `poolOptions` não
+  existem mais); cobertura passa a medir `src/lib/**/*.ts`.
+- `playwright.config.ts` aponta para o build de produção (`pnpm build &&
+  pnpm preview`, porta 4173) em vez de `wrangler pages dev`, que exigiria token
+  por causa do binding de AI.
+- `stryker.config.mjs` movido de `tests/mutation/` para a raiz — o
+  `stryker run` não encontrava a config.
+- `AGENTS.md` reescrito (o arquivo estava truncado na seção "Estrutura") com
+  stack, comandos, estrutura, os 9 gates e a política de código vendorizado.
+
+### Tooling
+
+- `eslint.config.js` (flat config com typescript-eslint, eslint-plugin-svelte,
+  eslint-plugin-security e eslint-config-prettier), `.prettierrc`,
+  `.prettierignore`, `knip.json`, `.jscpd.json` — antes o kit tinha essas
+  ferramentas como dependência e **nenhuma config**, então `pnpm lint` e
+  `pnpm complexity:scan` não rodavam.
+- `pnpm-lock.yaml` gerado (antes o `verify.sh` falhava em
+  `pnpm install --frozen-lockfile`).
+- `scripts/validate-kit.mjs` valida `components.json`, os tokens do `app.css`,
+  o `cn`, os 8 componentes, as dependências de runtime/build e proíbe `latest`.
+
+### Tests
+
+- 25 testes unitários (inclui `validation.test.ts`) e 28 testes e2e
+  (`tests/e2e/shadcn.spec.ts` cobre os 8 componentes, dark mode e o CSS do
+  Tailwind).
+- Corrigidos mocks e testes que nunca rodavam: `cookies.set/delete` com opções,
+  `FormData` no mock de `Request`, `toBeTypeOf` (matcher do Vitest no
+  Playwright) e uma variável não usada.
+
+### Security
+
+- `components.json.registry` e o pin do CLI passam a ser verificados no
+  `security-scan.sh`.
+
 ## [1.0.0] - 2026-09-15
 
 ### Added

@@ -31,6 +31,7 @@ renomear um componente.
 12. [Checklist de completude](#12-checklist-de-completude)
 13. [Comandos](#13-Comandos)
 14. [Templates](#14-Templates)
+15. [Componentes de UI](#15-componentes-de-ui-shadcn-svelte)
 
 ---
 
@@ -38,15 +39,16 @@ renomear um componente.
 
 | Categoria | Quantidade |
 |-----------|-----------:|
-| Skills | 12 |
+| Skills | 13 |
 | Scripts | 8 |
 | Subagentes | 5 |
-| Security Gates | 8 |
+| Security Gates | 9 |
+| Componentes de UI | 8 |
 | Tipos de hook | 8 |
 | Workflows CI/CD | 2 |
 | Suítes de teste | 3 (unit, e2e, mutation) |
 | Documentos | 8 |
-| Arquivos de configuração | 6 |
+| Arquivos de configuração | 16 |
 | Migrations | 2 |
 | Comandos | 5 |
 | Templates | 2 |
@@ -72,6 +74,7 @@ padrões, anti-patterns e checklist do seu domínio.
 | 10 | `code-complexity` | Complexidade, duplicação, dead code | Adicionar/refatorar funções |
 | 11 | `git-flow` | Branches, commits, PRs, releases | Qualquer operação Git |
 | 12 | `agentic-code-review` | Camadas de review, red flags | Revisão de PR |
+| 13 | `shadcn-svelte` | `components.json`, CLI, aliases, tokens `oklch`, dark mode, Bits UI | `src/lib/components/ui/**`, `components.json`, `src/app.css`, `src/lib/utils.ts` |
 
 **Localização:** `.agents/skills/<nome>/SKILL.md`
 
@@ -170,6 +173,7 @@ seção 5.
 | 6 | OWASP | Top 10 verificado. | `scripts/owasp-check.sh` |
 | 7 | Prompt Injection | Input sanitizado antes de LLM. | owasp-check A03 |
 | 8 | Deploy | Staging → smoke → aprovação → prod. | `.github/workflows/release.yml` + environment protegido |
+| 9 | Supply chain de UI | CLI em versão fixa, registry oficial, `add` revisado em PR, `--overwrite` só com intenção. | `scripts/security-scan.sh`, review do diff de `ui/` |
 
 **Onde os gates são aplicados:**
 
@@ -177,12 +181,19 @@ seção 5.
 |------|------|
 | `.husky/pre-commit` | Gate 1 — lint, type check e gitleaks nos arquivos staged |
 | Hook `PostToolUse` (`.agents/hooks.json`) | Gates 2, 3 — feedback no contexto do agente após cada edição |
-| `.husky/pre-push` | Gates 1, 2, 3, 4, 5, 6, 7 — verify + security + OWASP + complexidade |
+| `.husky/pre-push` | Gates 1, 2, 3, 4, 5, 6, 7, 9 — verify + security + OWASP + complexidade |
 | `.github/workflows/ci.yml` | Repete todos os gates no CI (fonte da verdade) |
+| `scripts/security-scan.sh` | Gate 9 — confere registry oficial e pin do CLI do shadcn |
 | Environment protegido no GitHub | Gate 8 — aprovação de deploy em produção |
 
 Nenhum desses é o `require_approval` do `harness.config.yml`: aquele
 bloco é documentação de intenção, sem efeito de runtime.
+
+Gate 9 roda em `scripts/security-scan.sh` (registry oficial + pin do
+CLI) e na revisão humana do diff de `src/lib/components/ui/**`. O código
+vendorizado fica fora de ESLint/Prettier/cobertura/knip/jscpd/
+complexidade, mas continua em `svelte-check`, e2e e varredura de
+segurança.
 
 ---
 
@@ -194,8 +205,8 @@ que não são eventos do bridge vivem nos hooks de git.
 
 | # | Gate | Onde vive | Quando dispara | Ação |
 |---|------|-----------|----------------|------|
-| 1 | `PreToolUse` | `.agents/hooks.json` | Antes de `edit`/`write`/`str_replace_editor` | `scripts/pre-edit-check.sh` via `hook-dispatch.mjs` |
-| 2 | `PostToolUse` | `.agents/hooks.json` | Depois de `edit`/`write`/`str_replace_editor` | `scripts/post-edit-check.sh` via `hook-dispatch.mjs` |
+| 1 | `PreToolUse` | `.agents/hooks.json` | Antes de `edit`/`write`/`str_replace_editor` | `scripts/pre-edit-check.sh` via `hook-dispatch.mjs` (classifica `src/lib/components/ui/**`, `components.json`, `src/app.css` e `src/lib/utils.ts` → Gate 9 + skill `shadcn-svelte`) |
+| 2 | `PostToolUse` | `.agents/hooks.json` | Depois de `edit`/`write`/`str_replace_editor` | `scripts/post-edit-check.sh` via `hook-dispatch.mjs` (check + lint + teste focado + `prettier --check` no arquivo alterado, como aviso) |
 | 3 | `UserPromptSubmit` | `.agents/hooks.json` | Ao enviar mensagem | Lembrete de skills no contexto |
 | 4 | PreCommit | `.husky/pre-commit` | Antes de `git commit` | lint + check + gitleaks |
 | 5 | PrePR | `.husky/pre-push` | Antes de `git push` | verify + security + OWASP + complexity |
@@ -203,6 +214,14 @@ que não são eventos do bridge vivem nos hooks de git.
 
 **Localização:** a linha do bridge fica em `cordis.patch.yml`; a
 configuração dos eventos fica em `.agents/hooks.json`.
+
+**Classificações do `PreToolUse`:** o `pre-edit-check.sh` reconhece
+`src/lib/components/ui/**`, `components.json`, `src/app.css` e
+`src/lib/utils.ts` e responde com o Gate 9 + a skill `shadcn-svelte`.
+Ele injeta contexto, não bloqueia. No `PostToolUse`, o
+`post-edit-check.sh` passou a rodar `prettier --check` no arquivo
+alterado — é **aviso, não falha**, para não travar em arquivo
+vendorizado, markdown ou gerado.
 
 **Eventos que o bridge suporta:** `SessionStart`, `UserPromptSubmit`,
 `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStart`, `SubagentStop`.
@@ -337,11 +356,17 @@ Dúvida sobre skill      → .agents/skills/<nome>/SKILL.md
 | `.gitignore` | Arquivos ignorados pelo Git |
 | `package.json` | Scripts e dependências |
 | `tsconfig.json` | TypeScript strict |
-| `svelte.config.js` | SvelteKit + adapter Cloudflare |
-| `vite.config.ts` | Vite |
+| `svelte.config.js` | SvelteKit + adapter Cloudflare (`remoteBindings: false`) |
+| `vite.config.ts` | Vite + plugin `@tailwindcss/vite` |
 | `vitest.config.ts` | Vitest + coverage |
 | `playwright.config.ts` | Playwright |
-| `tests/mutation/stryker.config.mjs` | Stryker |
+| `stryker.config.mjs` | Stryker (movido de `tests/mutation/`) |
+| `components.json` | Config do CLI do shadcn-svelte (registry, aliases, baseColor) |
+| `eslint.config.js` | ESLint flat config (js + typescript-eslint + svelte + security + prettier) |
+| `.prettierrc` | Regras do Prettier |
+| `.prettierignore` | Exclusões do Prettier (inclui `ui/` vendorizado) |
+| `knip.json` | Detecção de dead code |
+| `.jscpd.json` | Detecção de duplicação |
 
 ### 10.3 — Migrations
 
@@ -392,6 +417,8 @@ Guia para bootstrap em novo projeto (não-SvelteKit ou não-Cloudflare).
 | `harness.config.yml` | `sandbox.allowed_write_paths` |
 | `docs/SETUP.md` | Pré-requisitos, recursos |
 | `docs/HARNESS.md` | Exemplos específicos do stack |
+| `components.json` | Registry, aliases e `baseColor` do shadcn-svelte |
+| `src/app.css` | Tokens `oklch` da marca |
 
 ### 11.3 — Remover (específico deste stack)
 
@@ -400,6 +427,7 @@ Guia para bootstrap em novo projeto (não-SvelteKit ou não-Cloudflare).
 | `wrangler.toml`, `wrangler.staging.toml`, `wrangler.production.toml` | Cloudflare |
 | Skills `cloudflare-d1`, `cloudflare-kv`, `cloudflare-r2`, `cloudflare-ai-gateway`, `cloudflare-security` | Cloudflare |
 | Skills `sveltekit-runes`, `sveltekit-auth` | SvelteKit |
+| Skill `shadcn-svelte`, `src/lib/components/ui/**`, `components.json` | Tailwind v4 + shadcn-svelte |
 | `migrations/*.sql` (D1) | Cloudflare D1 |
 | `svelte.config.js`, `vite.config.ts` | SvelteKit |
 | `playwright.config.ts` com `wrangler pages dev` | Cloudflare |
@@ -437,6 +465,7 @@ Use este checklist para verificar que o kit está íntegro.
 - [ ] `.agents/skills/code-complexity/SKILL.md`
 - [ ] `.agents/skills/git-flow/SKILL.md`
 - [ ] `.agents/skills/agentic-code-review/SKILL.md`
+- [ ] `.agents/skills/shadcn-svelte/SKILL.md`
 
 ### 12.2 — Scripts
 
@@ -468,13 +497,22 @@ Use este checklist para verificar que o kit está íntegro.
 - [ ] `vite.config.ts`
 - [ ] `vitest.config.ts`
 - [ ] `playwright.config.ts`
+- [ ] `stryker.config.mjs`
+- [ ] `components.json`
+- [ ] `eslint.config.js`
+- [ ] `.prettierrc`
+- [ ] `.prettierignore`
+- [ ] `knip.json`
+- [ ] `.jscpd.json`
+- [ ] `pnpm-lock.yaml`
 
 ### 12.4 — Testes
 
 - [ ] `tests/setup.ts`
 - [ ] `tests/unit/example.test.ts`
 - [ ] `tests/e2e/smoke.spec.ts`
-- [ ] `tests/mutation/stryker.config.mjs`
+- [ ] `tests/e2e/shadcn.spec.ts`
+- [ ] `stryker.config.mjs`
 
 ### 12.5 — CI/CD
 
@@ -516,6 +554,17 @@ Use este checklist para verificar que o kit está íntegro.
 - [ ] Agente responde perguntas sobre `AGENTS.md`
 - [ ] Skill é carregada sob demanda (testado)
 - [ ] Hook dispara em edição (testado)
+
+### 12.10 — UI
+
+- [ ] `src/app.html` com script anti-FOUC
+- [ ] `src/app.css` com `:root`, `.dark` e `@theme inline`
+- [ ] `src/routes/+layout.svelte` importa `app.css` e monta `ModeWatcher`/`Toaster`
+- [ ] `src/lib/components/theme-toggle.svelte`
+- [ ] 8 componentes em `src/lib/components/ui/` (`button`, `card`, `input`, `label`, `dialog`, `dropdown-menu`, `table`, `sonner`)
+- [ ] `components.json` com registry oficial e `baseColor: neutral`
+- [ ] `shadcn-svelte` em versão fixa (sem `latest`)
+- [ ] `pnpm test:e2e` cobre os 8 componentes
 
 ## 13. Comandos
 
@@ -634,10 +683,55 @@ Mesma lógica para `/sveflare-plan` e o template `PLAN.md`.
 
 ---
 
+## 15. Componentes de UI (shadcn-svelte)
+
+O app mínimo em `src/` é a página de prova dos componentes. Todos vêm do
+CLI do shadcn-svelte, usam Bits UI 2 por baixo e moram em
+`src/lib/components/ui/<nome>/`.
+
+| # | Componente | Pasta | Papel |
+|---|------------|-------|-------|
+| 1 | `button` | `ui/button/` | Ação primária/secundária, com variantes |
+| 2 | `card` | `ui/card/` | Blocos de conteúdo com header/footer |
+| 3 | `input` | `ui/input/` | Campo de texto |
+| 4 | `label` | `ui/label/` | Rótulo acessível para inputs |
+| 5 | `dialog` | `ui/dialog/` | Modal acessível (foco/teclado via Bits UI) |
+| 6 | `dropdown-menu` | `ui/dropdown-menu/` | Menu de ações |
+| 7 | `table` | `ui/table/` | Tabela de dados |
+| 8 | `sonner` | `ui/sonner/` | Toasts (`svelte-sonner`) |
+
+**Config:** `components.json` (registry `https://shadcn-svelte.com/registry`,
+aliases `$lib/**`, `baseColor: neutral`, preset `vega`).
+**Tema:** `src/app.css` (tokens `oklch` em `:root`/`.dark`, mapeamento em
+`@theme inline`).
+
+### Como adicionar
+
+```bash
+pnpm ui:add badge
+pnpm ui:add card dialog   # vários de uma vez
+```
+
+O comando baixa o componente do registry e escreve em `ui/`. Depois:
+
+1. Revise o diff (código executável de terceiro — Gate 9).
+2. Re-pine qualquer `"latest"` que o CLI tenha escrito.
+3. Rode `pnpm check` e `pnpm test:e2e`.
+
+### O que é vendorizado
+
+`src/lib/components/ui/**` é regenerável pelo CLI e fica **fora** de
+ESLint, Prettier, cobertura, knip, jscpd e complexidade. Continua
+**dentro** de `svelte-check`, e2e e varredura de segurança. **Não edite
+esses arquivos à mão** — regenere com `pnpm ui:add` (ou `--overwrite`
+quando for intencional).
+
+---
+
 ## Como usar este documento
 
 ### Para auditoria
-Percorra as seções 2–10 e confirme que cada componente existe no
+Percorra as seções 2–15 e confirme que cada componente existe no
 projeto. Use o checklist da seção 12 para validação completa.
 
 ### Para bootstrap em novo projeto
@@ -649,7 +743,7 @@ projeto. Use o checklist da seção 12 para validação completa.
 
 ### Para manutenção contínua
 Sempre que adicionar/remover um componente:
-1. Atualize a seção correspondente (2–10).
+1. Atualize a seção correspondente (2–15).
 2. Atualize o resumo numérico (seção 1).
 3. Atualize o checklist (seção 12).
 4. Registre em `CHANGELOG.md`.
