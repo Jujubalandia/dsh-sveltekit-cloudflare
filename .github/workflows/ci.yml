@@ -117,12 +117,96 @@ jobs:
           fi
 
   # ================================================================
-  # Job 3 — Gate final
+  # Job 3 — App: install, check, lint, testes e build
+  # ================================================================
+  app-verify:
+    name: App (check, lint, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [kit-validate]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Testes + cobertura
+        run: pnpm test:coverage
+
+      - name: Build (adapter Cloudflare)
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Conferir o artefato do Cloudflare
+        run: |
+          test -f .svelte-kit/cloudflare/_worker.js
+          test -d .svelte-kit/cloudflare/_app
+          echo "✅ build do Cloudflare gerado"
+
+  # ================================================================
+  # Job 4 — E2E: os 8 componentes do shadcn em navegador real
+  # ================================================================
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [app-verify]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Instalar Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: pnpm exec playwright test --project=chromium
+        env:
+          CI: 'true'
+
+      - name: Upload do relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ================================================================
+  # Job 5 — Gate final
   # ================================================================
   ci-success:
     name: CI success gate
     runs-on: ubuntu-latest
-    needs: [kit-validate, secrets-scan]
+    needs: [kit-validate, secrets-scan, app-verify, e2e]
     if: always()
     steps:
       - name: Verificar status dos jobs obrigatórios
@@ -135,21 +219,29 @@ jobs:
             echo "❌ secrets-scan falhou"
             exit 1
           fi
+          if [ "${{ needs.app-verify.result }}" != "success" ]; then
+            echo "❌ app-verify falhou"
+            exit 1
+          fi
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "❌ e2e falhou"
+            exit 1
+          fi
           echo "✅ Todos os gates de CI passaram"
 
 # ==================================================================
-# Reativando os gates de aplicação
+# Grafo de jobs
 # ==================================================================
-# Quando este kit for usado como base de um projeto SvelteKit de
-# verdade (com src/, pnpm-lock.yaml e node_modules), acrescente de
-# volta os jobs de aplicação, todos com `needs: [kit-validate]`:
+#   kit-validate ──┬── app-verify ── e2e
+#                  └── secrets-scan
+#                            │
+#                       ci-success (todas precisam passar)
 #
-#   - pnpm install --frozen-lockfile
-#   - pnpm check      (svelte-check)
-#   - pnpm lint       (prettier + eslint)
-#   - pnpm test:coverage
-#   - pnpm build
-#   - pnpm test:e2e   (Playwright)
+# `kit-validate` roda primeiro e é barato: valida o contrato do bundle
+# (manifest, dialeto do patch, frontmatter das skills, components.json,
+# componentes, dependências pinadas) antes de gastar minutos instalando.
 #
-# Eles não rodam aqui porque dependem de artefatos que este pacote
-# deliberadamente não contém.
+# `app-verify` prova que o kit é usável: install, type check, lint, testes
+# com cobertura e build do adapter Cloudflare.
+#
+# `e2e` sobe o build e roda os 8 componentes do shadcn num Chromium real.
