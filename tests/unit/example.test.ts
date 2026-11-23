@@ -39,15 +39,11 @@ describe('validação de input com Zod', () => {
   });
 
   it('rejeita email inválido', () => {
-    expect(() =>
-      CreateUserSchema.parse({ email: 'not-an-email', name: 'Bob' })
-    ).toThrow();
+    expect(() => CreateUserSchema.parse({ email: 'not-an-email', name: 'Bob' })).toThrow();
   });
 
   it('rejeita nome vazio', () => {
-    expect(() =>
-      CreateUserSchema.parse({ email: 'user@example.com', name: '' })
-    ).toThrow();
+    expect(() => CreateUserSchema.parse({ email: 'user@example.com', name: '' })).toThrow();
   });
 
   it('aplica defaults e campos opcionais', () => {
@@ -72,15 +68,12 @@ describe('D1 — padrão de uso', () => {
     const stmt = db.prepare('SELECT * FROM users WHERE id = ?').bind('1');
     const row = await stmt.first();
 
-    expect(db.prepare).toHaveBeenCalledWith(
-      'SELECT * FROM users WHERE id = ?'
-    );
+    expect(db.prepare).toHaveBeenCalledWith('SELECT * FROM users WHERE id = ?');
     expect(db._statement.bind).toHaveBeenCalledWith('1');
     expect(row).toEqual({ id: '1', email: 'user@example.com' });
   });
 
   it('rejeita SQL concatenado (regra de ouro)', () => {
-    const db = mockDB();
     const userId = "1' OR '1'='1";
 
     // Padrão PROIBIDO:
@@ -242,7 +235,7 @@ describe('spies e mocks', () => {
   });
 
   it('mock de módulo com vi.mock (documentação)', () => {
-    // Exemplo (não executado): 
+    // Exemplo (não executado):
     // vi.mock('$server/session', () => ({
     //   validateSession: vi.fn().mockResolvedValue({ user: { id: '1' } })
     // }));

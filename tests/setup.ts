@@ -126,11 +126,18 @@ export const mockRequestEvent = (opts: MockEventOptions = {}) => {
 
   const requestInit: RequestInit = { method, headers };
   if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
-    requestInit.body =
-      typeof body === 'string' ? body : JSON.stringify(body);
-    if (!requestInit.headers) requestInit.headers = {};
-    (requestInit.headers as Record<string, string>)['content-type'] ??=
-      'application/json';
+    if (body instanceof FormData) {
+      // Passa o FormData direto e NÃO define content-type: o runtime gera o
+      // boundary do multipart sozinho. Definir `application/json` aqui fazia
+      // `request.formData()` lançar TypeError.
+      requestInit.body = body;
+    } else if (typeof body === 'string') {
+      requestInit.body = body;
+      (requestInit.headers as Record<string, string>)['content-type'] ??= 'application/json';
+    } else {
+      requestInit.body = JSON.stringify(body);
+      (requestInit.headers as Record<string, string>)['content-type'] ??= 'application/json';
+    }
   }
 
   const cookieJar: Record<string, string> = { ...cookies };
@@ -144,10 +151,13 @@ export const mockRequestEvent = (opts: MockEventOptions = {}) => {
 
     cookies: {
       get: vi.fn((name: string) => cookieJar[name]),
-      set: vi.fn((name: string, value: string) => {
+      getAll: vi.fn(() => Object.entries(cookieJar).map(([name, value]) => ({ name, value }))),
+      // A assinatura real do SvelteKit aceita opções de cookie; o mock as
+      // recebe e ignora, para que os testes possam exercitar a API completa.
+      set: vi.fn((name: string, value: string, _opts?: unknown) => {
         cookieJar[name] = value;
       }),
-      delete: vi.fn((name: string) => {
+      delete: vi.fn((name: string, _opts?: unknown) => {
         delete cookieJar[name];
       }),
       serialize: vi.fn()
@@ -194,8 +204,7 @@ export const sleep = (ms: number): Promise<void> =>
 /**
  * Lê um Response como JSON tipado.
  */
-export const readJson = async <T = unknown>(res: Response): Promise<T> =>
-  (await res.json()) as T;
+export const readJson = async <T = unknown>(res: Response): Promise<T> => (await res.json()) as T;
 
 // ==============================================================
 // Setup e teardown globais
