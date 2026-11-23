@@ -108,3 +108,15 @@ Thumbs.db
 *.pfx
 id_rsa*
 id_ed25519*
+
+# ==============================================================
+# Caches locais de tooling
+# ==============================================================
+# Store local do pnpm e caches XDG quando o ambiente não permite usar
+# os diretórios globais (~/.local/share/pnpm, ~/.cache).
+.pnpm-store/
+.pnpm-home/
+.xdg/
+.npm-cache/
+.playwright/
+.corepack/

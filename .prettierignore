@@ -1,0 +1,39 @@
+# Markdown e prompts são mantidos à mão: quebra de linha e largura são
+# intencionais em PT-BR, e o Prettier as desfaria.
+*.md
+docs/
+.agents/
+
+# Scripts de shell e utilitários de harness, com formatação própria.
+scripts/
+lib/
+.husky/
+test-install.sh
+
+# Workflows são YAML escrito à mão; evitar churn de formatação.
+.github/
+
+# Gerado pelo CLI do shadcn-svelte (indentação com tab, proposital).
+components.json
+
+# Código vendorizado pelo shadcn-svelte (regenerado pelo CLI).
+src/lib/components/ui/
+
+# Artefatos de build e dependências
+.svelte-kit/
+build/
+dist/
+coverage/
+reports/
+.stryker-tmp/
+node_modules/
+static/
+pnpm-lock.yaml
+
+# Caches locais de tooling (store do pnpm, XDG, cache do npm)
+.pnpm-store/
+.pnpm-home/
+.xdg/
+.npm-cache/
+.playwright/
+.corepack/

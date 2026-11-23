@@ -39,6 +39,8 @@
     "build",
     "dist",
     "coverage",
-    ".wrangler"
+    ".wrangler",
+    "reports",
+    "eslint.config.js"
   ]
 }
