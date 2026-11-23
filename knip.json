@@ -1,32 +1,17 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": [
-    "src/app.html",
-    "src/routes/**/+*.svelte",
-    "vite.config.ts",
-    "vitest.config.ts",
-    "playwright.config.ts",
-    "svelte.config.js",
-    "eslint.config.js",
-    "stryker.config.mjs"
-  ],
   "project": ["src/**/*.{ts,svelte,js}", "tests/**/*.ts", "scripts/**/*.mjs", "lib/**/*.mjs"],
   "ignoreFiles": ["src/lib/components/ui/**"],
   "ignore": ["src/lib/components/ui/**"],
   "ignoreDependencies": [
     "@fontsource-variable/inter",
     "@lucide/svelte",
-    "@tailwindcss/vite",
-    "@vitest/coverage-v8",
     "cn",
     "eslint-config-prettier",
     "eslint-plugin-security",
     "husky",
     "shadcn-svelte",
-    "tailwind-variants",
-    "tailwindcss",
     "tw-animate-css"
   ],
-  "ignoreBinaries": ["gitleaks", "pnpm", "wrangler"],
   "ignoreExportsUsedInFile": true
 }
