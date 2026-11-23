@@ -11,7 +11,7 @@
 //   4. cordis.patch.yml é um array YAML de patches válidos
 //   5. nenhuma linha de plugin novo ficou FORA de `insert:`
 //      (o erro que fazia o bundle inteiro virar no-op)
-//   6. as 12 skills têm frontmatter com name válido + description
+//   6. as 13 skills têm frontmatter com name válido + description
 //   7. .agents/hooks.json é JSON válido e só usa eventos suportados
 //   8. os scripts .sh têm sintaxe de shell válida
 //
@@ -168,8 +168,8 @@ try {
   fail('.agents/skills/ não encontrado')
 }
 
-if (skillDirs.length > 0 && skillDirs.length !== 12) {
-  note(`esperadas 12 skills, encontradas ${skillDirs.length}`)
+if (skillDirs.length > 0 && skillDirs.length !== 13) {
+  note(`esperadas 13 skills, encontradas ${skillDirs.length}`)
 }
 
 for (const dir of skillDirs) {
@@ -244,6 +244,121 @@ for (const s of shellScripts) {
 }
 
 // --------------------------------------------------------------
+// 9 — app + design system (Tailwind v4 + shadcn-svelte)
+// --------------------------------------------------------------
+const EXPECTED_COMPONENTS = [
+  'button',
+  'card',
+  'input',
+  'label',
+  'dialog',
+  'dropdown-menu',
+  'table',
+  'sonner',
+];
+
+const OFFICIAL_REGISTRY = 'https://shadcn-svelte.com/registry';
+
+let componentsJson;
+if (!existsSync(join(ROOT, 'components.json'))) {
+  fail('components.json ausente: o CLI do shadcn-svelte nao funciona sem ele');
+} else {
+  try {
+    componentsJson = readJson('components.json');
+  } catch (error) {
+    fail(`components.json nao e JSON valido: ${error.message}`);
+  }
+}
+
+if (componentsJson) {
+  for (const key of ['lib', 'utils', 'components', 'ui', 'hooks']) {
+    if (typeof componentsJson.aliases?.[key] !== 'string') {
+      fail(`components.json: falta aliases.${key}`);
+    }
+  }
+
+  const cssRel = componentsJson.tailwind?.css;
+  if (cssRel !== 'src/app.css') {
+    fail(`components.json: tailwind.css deveria ser src/app.css (esta "${String(cssRel)}")`);
+  }
+
+  // Gate 9: o registry e codigo executavel no browser; so o oficial.
+  if (componentsJson.registry !== OFFICIAL_REGISTRY) {
+    fail(
+      `Gate 9: components.json.registry nao e o oficial (${String(componentsJson.registry)})`
+    );
+  }
+}
+
+// src/app.css precisa ter o pipeline e os tokens nos dois temas.
+const APP_CSS = join(ROOT, 'src/app.css');
+if (!existsSync(APP_CSS)) {
+  fail('src/app.css ausente: sem ele o Tailwind nao compila');
+} else {
+  const css = readFileSync(APP_CSS, 'utf8');
+  const required = [
+    ['@import "tailwindcss"', /@import\s+['"]tailwindcss['"]/],
+    ['@custom-variant dark', /@custom-variant\s+dark/],
+    [':root com tokens', /:root\s*\{/],
+    ['.dark com tokens', /\.dark\s*\{/],
+    ['@theme inline', /@theme\s+inline\s*\{/],
+  ];
+  for (const [label, re] of required) {
+    if (!re.test(css)) fail(`src/app.css: falta ${label}`);
+  }
+}
+
+// O helper `cn` mora em src/lib/utils.ts (nao em um diretorio utils/).
+const UTILS_TS = join(ROOT, 'src/lib/utils.ts');
+if (!existsSync(UTILS_TS)) {
+  fail('src/lib/utils.ts ausente: os componentes importam `cn` de $lib/utils.js');
+} else if (!/export\s*\{\s*cn\s*\}/.test(readFileSync(UTILS_TS, 'utf8'))) {
+  fail('src/lib/utils.ts nao exporta `cn`');
+}
+
+// Os componentes do kit precisam existir de fato.
+let missingComponents = 0;
+for (const component of EXPECTED_COMPONENTS) {
+  if (!existsSync(join(ROOT, 'src/lib/components/ui', component, 'index.ts'))) {
+    fail(`src/lib/components/ui/${component}/index.ts ausente`);
+    missingComponents += 1;
+  }
+}
+
+// Dependencias: runtime e build separados.
+const runtimeDeps = [
+  '@lucide/svelte',
+  'bits-ui',
+  'cn',
+  'mode-watcher',
+  'svelte-sonner',
+  'tailwind-variants',
+];
+for (const dep of runtimeDeps) {
+  if (typeof pkg.dependencies?.[dep] !== 'string') {
+    fail(`package.json: ${dep} deveria estar em dependencies`);
+  }
+}
+
+const buildDeps = ['@tailwindcss/vite', 'shadcn-svelte', 'tailwindcss', 'tw-animate-css'];
+for (const dep of buildDeps) {
+  if (typeof pkg.devDependencies?.[dep] !== 'string') {
+    fail(`package.json: ${dep} deveria estar em devDependencies`);
+  }
+}
+
+// Gate 9: CLI do registry em versao fixa, e nada de "latest" solto.
+if (pkg.devDependencies?.['shadcn-svelte'] === 'latest') {
+  fail('Gate 9: shadcn-svelte nao pode ficar como "latest"; fixe a versao');
+}
+for (const [name, version] of Object.entries({
+  ...pkg.dependencies,
+  ...pkg.devDependencies,
+})) {
+  if (version === 'latest') fail(`package.json: ${name} esta como "latest"`);
+}
+
+// --------------------------------------------------------------
 // Resultado
 // --------------------------------------------------------------
 console.log('')
@@ -251,6 +366,9 @@ console.log('Validação do harness kit')
 console.log(`  skills:  ${skillDirs.length}`)
 console.log(`  scripts: ${shellScripts.length} .sh`)
 console.log(`  patch:   ${typeof patchRel === 'string' ? patchRel : '(ausente)'}`)
+console.log(
+  `  ui:      ${EXPECTED_COMPONENTS.length - missingComponents}/${EXPECTED_COMPONENTS.length} componentes`
+)
 console.log('')
 
 for (const n of notes) console.log(`  ·  ${n}`)

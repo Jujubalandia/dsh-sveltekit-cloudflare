@@ -35,7 +35,7 @@ subagents:
       - edit
       - write
       - bash
-    description: "Implementa a mudança"
+    description: 'Implementa a mudança'
     system_prompt: |
       Você implementa mudanças seguindo AGENT.md e as skills carregadas.
       Não declare uma tarefa como concluída: apenas produza o artefato.
@@ -46,7 +46,7 @@ subagents:
       - read
       - bash
       - grep
-    description: "Verifica independentemente. Não confia no drafter."
+    description: 'Verifica independentemente. Não confia no drafter.'
     system_prompt: |
       Você é um verificador independente. Nunca assuma que o drafter está
       correto. Execute os testes, leia o código com atenção, procure por
@@ -59,7 +59,7 @@ subagents:
     tools:
       - read
       - grep
-    description: "Decide se a tarefa está pronta com base em evidências."
+    description: 'Decide se a tarefa está pronta com base em evidências.'
     system_prompt: |
       Você decide se a tarefa pode ser declarada concluída. Baseie-se
       exclusivamente em evidências registradas (saídas de comando,
@@ -71,7 +71,7 @@ subagents:
       - bash
       - read
       - grep
-    description: "Roda OWASP check e gitleaks."
+    description: 'Roda OWASP check e gitleaks.'
     system_prompt: |
       Execute scripts/owasp-check.sh e gitleaks. Classifique cada achado
       como bloqueante, aviso ou falso positivo. Nunca ignore um bloqueante.
@@ -81,7 +81,7 @@ subagents:
     tools:
       - bash
       - read
-    description: "Roda análise de complexidade e duplicação."
+    description: 'Roda análise de complexidade e duplicação.'
     system_prompt: |
       Execute scripts/complexity-check.sh. Reporte funções com complexidade
       acima de 10, arquivos acima de 300 linhas, duplicação acima de 3%,
@@ -92,51 +92,51 @@ subagents:
 # ------------------------------------------------------------------
 hooks:
   PreToolUse:
-    - match: "edit|write"
-      description: "Ler arquivo, verificar gates, carregar skill relevante."
-      run: "./scripts/pre-edit-check.sh $FILE"
+    - match: 'edit|write'
+      description: 'Ler arquivo, verificar gates, carregar skill relevante.'
+      run: './scripts/pre-edit-check.sh $FILE'
 
   PostToolUse:
-    - match: "edit|write"
-      description: "Type check + lint + teste focado no arquivo modificado."
-      run: "./scripts/post-edit-check.sh $FILE"
+    - match: 'edit|write'
+      description: 'Type check + lint + teste focado no arquivo modificado.'
+      run: './scripts/post-edit-check.sh $FILE'
 
   PreCommit:
-    - description: "Lint + type check"
-      run: "pnpm lint && pnpm check"
-    - description: "Secrets scan nos arquivos staged"
-      run: "gitleaks protect --staged --redact --config .gitleaks.toml"
+    - description: 'Lint + type check'
+      run: 'pnpm lint && pnpm check'
+    - description: 'Secrets scan nos arquivos staged'
+      run: 'gitleaks protect --staged --redact --config .gitleaks.toml'
 
   PrePR:
-    - description: "Pipeline completo"
-      run: "./scripts/verify.sh"
-    - description: "Security scan"
-      run: "./scripts/security-scan.sh"
-    - description: "OWASP Top 10"
-      run: "./scripts/owasp-check.sh"
-    - description: "Complexidade e redundância"
-      run: "./scripts/complexity-check.sh"
+    - description: 'Pipeline completo'
+      run: './scripts/verify.sh'
+    - description: 'Security scan'
+      run: './scripts/security-scan.sh'
+    - description: 'OWASP Top 10'
+      run: './scripts/owasp-check.sh'
+    - description: 'Complexidade e redundância'
+      run: './scripts/complexity-check.sh'
 
   PreDeploy:
-    - description: "Verificação completa"
-      run: "./scripts/verify.sh"
-    - description: "Security scan"
-      run: "./scripts/security-scan.sh"
+    - description: 'Verificação completa'
+      run: './scripts/verify.sh'
+    - description: 'Security scan'
+      run: './scripts/security-scan.sh'
 
   PreDeployProduction:
-    - description: "Security scan obrigatório"
-      run: "./scripts/security-scan.sh"
-    - description: "OWASP obrigatório"
-      run: "./scripts/owasp-check.sh"
-    - description: "Aprovação humana obrigatória"
+    - description: 'Security scan obrigatório'
+      run: './scripts/security-scan.sh'
+    - description: 'OWASP obrigatório'
+      run: './scripts/owasp-check.sh'
+    - description: 'Aprovação humana obrigatória'
       require_approval: true
 
   PostDeploy:
-    - description: "Smoke test pós-deploy"
-      run: "./scripts/smoke-test.sh $ENV"
+    - description: 'Smoke test pós-deploy'
+      run: './scripts/smoke-test.sh $ENV'
 
   UserPromptSubmit:
-    - description: "Lembrete de skills e subagentes"
+    - description: 'Lembrete de skills e subagentes'
       run: "echo '[DSH] Carregue skill relevante. Use subagente verificador.'"
 
 # ------------------------------------------------------------------
@@ -152,35 +152,38 @@ goals:
     goal:
       enabled: true
       max_attempts: 5
-      description: "Critério mensurável, para após N tentativas."
+      description: 'Critério mensurável, para após N tentativas.'
     time:
       enabled: true
       default_interval: 5m
-      description: "Verifica PR, CI, issues em intervalo."
+      description: 'Verifica PR, CI, issues em intervalo.'
     proactive:
       enabled: false
-      description: "Triagem agendada. Habilite manualmente por tarefa."
+      description: 'Triagem agendada. Habilite manualmente por tarefa.'
 
 # ------------------------------------------------------------------
 # Sandbox — limites de escrita e rede
 # ------------------------------------------------------------------
 sandbox:
   allowed_write_paths:
-    - "src/"
-    - "workers/"
-    - "tests/"
-    - "migrations/"
-    - "scripts/"
-    - ".agents/skills/"
-    - ".agents/goals/"
-    - "docs/"
+    - 'src/'
+    - 'workers/'
+    - 'tests/'
+    - 'migrations/'
+    - 'scripts/'
+    - '.agents/skills/'
+    - '.agents/goals/'
+    - 'docs/'
   deny_write_paths:
-    - ".env"
-    - ".env.*"
-    - "wrangler.toml"
-    - "wrangler.production.toml"
-    - ".github/workflows/deploy-production.yml"
-    - ".gitleaks.toml"
+    - '.env'
+    - '.env.*'
+    - 'wrangler.toml'
+    - 'wrangler.production.toml'
+    - '.github/workflows/deploy-production.yml'
+    - '.gitleaks.toml'
+    # Config do design system: trocar baseColor/registry em silêncio muda o
+    # tema inteiro ou aponta para um registry de terceiro (Gate 9).
+    - 'components.json'
   network: false
   allow_shell: true
   allow_git: true
@@ -191,21 +194,23 @@ sandbox:
 review:
   tiers:
     fast:
-      when: "PR < 100 linhas e não toca auth, DB, AI Gateway"
-      action: "revisão leve"
+      when: 'PR < 100 linhas e não toca auth, DB, AI Gateway'
+      action: 'revisão leve'
     normal:
-      when: "PR < 400 linhas e não toca auth"
-      action: "revisão normal"
+      when: 'PR < 400 linhas e não toca auth'
+      action: 'revisão normal'
     heavy:
-      when: "toca auth, schema D1, AI Gateway ou R2"
-      action: "revisão pesada + security_auditor"
+      when: 'toca auth, schema D1, AI Gateway, R2 ou src/lib/components/ui/'
+      action: 'revisão pesada + security_auditor'
     critical:
-      when: "deploy prod ou migração D1"
-      action: "revisão humana obrigatória + approval gate"
+      when: 'deploy prod, migração D1 ou troca de components.json/registry'
+      action: 'revisão humana obrigatória + approval gate'
   red_flags:
-    - "testes reescritos para passar"
-    - "CI enfraquecido (lint removido, coverage reduzido)"
-    - "helper duplicado já existente"
-    - "input não confiável indo para LLM"
-    - "PR > 1000 linhas sem justificativa"
-    - "PR sem descrição de intenção"
+    - 'testes reescritos para passar'
+    - 'CI enfraquecido (lint removido, coverage reduzido)'
+    - 'helper duplicado já existente'
+    - 'input não confiável indo para LLM'
+    - 'PR > 1000 linhas sem justificativa'
+    - 'PR sem descrição de intenção'
+    - 'componente novo em src/lib/components/ui/ sem revisão do diff (Gate 9)'
+    - 'dependência em "latest" no package.json'

@@ -61,6 +61,15 @@ case "$FILE" in
     SKILLS+=("sveltekit-auth")
     ;;
 
+  # ---- UI vendorizada pelo shadcn-svelte ----
+  # Este case vem ANTES de *.svelte: no bash o primeiro padrão que casa vence.
+  *src/lib/components/ui/*)
+    NOTES+=("Código do registry: NÃO editar à mão. Regenere com 'pnpm ui:add <nome> -o' e leia o diff.")
+    NOTES+=("Runes Svelte 5 continuam valendo; acessibilidade vem do Bits UI, não reimplemente foco/teclado.")
+    GATES+=("Gate 9 (Supply chain de UI)")
+    SKILLS+=("shadcn-svelte" "sveltekit-runes")
+    ;;
+
   # ---- Svelte / componentes ----
   *.svelte)
     NOTES+=("Use apenas runes Svelte 5. Proibido export let / \$: / stores legadas.")
@@ -116,6 +125,22 @@ case "$FILE" in
   *.gitleaks.toml)
     NOTES+=("Config de detecção de secrets. Alterar com cuidado.")
     GATES+=("Gate 1 (Secrets)")
+    ;;
+
+  # ---- Design system (shadcn-svelte) ----
+  *components.json)
+    NOTES+=("Config do design system: baseColor não muda depois do init; trocar 'registry' exige revisão.")
+    GATES+=("Gate 9 (Supply chain de UI)")
+    SKILLS+=("shadcn-svelte")
+    ;;
+  *src/app.css)
+    NOTES+=("Tokens de tema em oklch. Mantenha :root, .dark e @theme inline em sincronia.")
+    NOTES+=("Contraste AA nos dois temas: texto normal ≥4.5:1, texto grande ≥3:1.")
+    SKILLS+=("shadcn-svelte" "cloudflare-security")
+    ;;
+  *src/lib/utils.ts)
+    NOTES+=("'cn' mora aqui (export de 'cn'). Não crie src/lib/utils/ competindo com o arquivo.")
+    SKILLS+=("shadcn-svelte")
     ;;
 
   # ---- CI / scripts ----
